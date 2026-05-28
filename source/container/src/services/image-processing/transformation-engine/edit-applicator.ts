@@ -117,6 +117,11 @@ export class EditApplicator {
     try {
       const format = edits.toFormat || (await image.metadata()).format;
       const options = edits.quality ? { quality: edits.quality } : {};
+
+      // Enable mozjpeg for JPEG to improve compression (10-15% smaller files)
+      if (format === 'jpeg') {
+        options['mozjpeg'] = true;
+      }
       // Sharp requires an explicit compression choice when emitting the heif format.
       // TODO: Look into supporting hevc over av1. Requires specific libvips compilation option.
       // https://sharp.pixelplumbing.com/api-output/#heif 

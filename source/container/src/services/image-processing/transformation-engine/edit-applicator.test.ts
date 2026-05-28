@@ -187,7 +187,16 @@ describe('EditApplicator', () => {
 
       await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
 
-      expect(mockImage.toFormat).toHaveBeenCalledWith('jpeg', { quality: 80 });
+      expect(mockImage.toFormat).toHaveBeenCalledWith('jpeg', { quality: 80, mozjpeg: true });
+    });
+
+    it('Should enable mozjpeg for JPEG format', async () => {
+      const mockImage = createMockSharp();
+      const edits: ImageEdits = { toFormat: 'jpeg' };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('jpeg', { mozjpeg: true });
     });
 
     it('Should add compression=av1 for heif format', async () => {
