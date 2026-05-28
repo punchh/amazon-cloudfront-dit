@@ -169,7 +169,11 @@ describe('EditApplicator', () => {
 
       await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
 
-      expect(mockImage.toFormat).toHaveBeenCalledWith('png', {});
+      expect(mockImage.toFormat).toHaveBeenCalledWith('png', {
+        palette: true,
+        compressionLevel: 9,
+        adaptiveFiltering: true,
+      });
     });
 
     it('Should fallback to metadata format when toFormat not provided', async () => {

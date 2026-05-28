@@ -122,6 +122,12 @@ export class EditApplicator {
       if (format === 'jpeg') {
         options['mozjpeg'] = true;
       }
+
+      if (format === 'png') {
+        options['palette'] = true;
+        options['compressionLevel'] = 9;
+        options['adaptiveFiltering'] = true;
+      }
       // Sharp requires an explicit compression choice when emitting the heif format.
       // TODO: Look into supporting hevc over av1. Requires specific libvips compilation option.
       // https://sharp.pixelplumbing.com/api-output/#heif 
