@@ -203,6 +203,34 @@ describe('EditApplicator', () => {
       expect(mockImage.toFormat).toHaveBeenCalledWith('jpeg', { mozjpeg: true });
     });
 
+    it('Should map quality to GIF optimization options', async () => {
+      const mockImage = createMockSharp();
+      const edits: ImageEdits = { toFormat: 'gif', quality: 80 };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('gif', {
+        colours: 205,
+        effort: 10,
+        interFrameMaxError: 6,
+        interPaletteMaxError: 2,
+      });
+    });
+
+    it('Should clamp GIF quality to valid bounds', async () => {
+      const mockImage = createMockSharp();
+      const edits: ImageEdits = { toFormat: 'gif', quality: 0 };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('gif', {
+        colours: 3,
+        effort: 10,
+        interFrameMaxError: 32,
+        interPaletteMaxError: 10,
+      });
+    });
+
     it('Should add compression=av1 for heif format', async () => {
       const mockImage = createMockSharp();
       const edits: ImageEdits = { toFormat: 'heif' };

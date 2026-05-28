@@ -123,11 +123,23 @@ export class EditApplicator {
         options['mozjpeg'] = true;
       }
 
+      // Enable PNG compression settings to reduce output size
       if (format === 'png') {
         options['palette'] = true;
         options['compressionLevel'] = 9;
         options['adaptiveFiltering'] = true;
       }
+
+      // Map generic quality input to Sharp GIF-specific optimization options
+      if (format === 'gif') {
+        const gifQuality = Math.max(1, Math.min(100, Number(edits.quality ?? 80)));
+        options['colours'] = Math.max(2, Math.min(256, Math.round(256 * (gifQuality / 100))));
+        options['effort'] = 10;
+        options['interFrameMaxError'] = Math.max(0, Math.min(32, Math.round(32 * (1 - gifQuality / 100))));
+        options['interPaletteMaxError'] = Math.max(0, Math.min(256, Math.round(10 * (1 - gifQuality / 100))));
+        delete options['quality']; // not a valid GifOption
+      }
+      
       // Sharp requires an explicit compression choice when emitting the heif format.
       // TODO: Look into supporting hevc over av1. Requires specific libvips compilation option.
       // https://sharp.pixelplumbing.com/api-output/#heif 
