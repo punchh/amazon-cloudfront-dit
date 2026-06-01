@@ -59,8 +59,8 @@ export class EditApplicator {
       if (this.shouldDeferResizing(edits)) {
           image.resize(edits.resize);
       }
-      
-      await this.applyFormat(image, edits);
+
+      await this.applyFormat(image, edits, isAnimation);
     } catch (error) {
       if (error instanceof ImageProcessingError) throw error;
       console.error('Sharp applyEdits failed:', { edits, error: error.message, stack: error.stack });
@@ -113,10 +113,23 @@ export class EditApplicator {
     image.sharpen(editValue === true ? undefined : editValue);
   }
 
-  private static async applyFormat(image: sharp.Sharp, edits: ImageEdits){
+  // Animated WebP can drop quality significantly without perceptual loss — motion
+  // masking lets the eye tolerate compression artifacts between rapidly changing
+  // frames. Cap quality to this value when emitting animated webp.
+  private static readonly ANIMATED_WEBP_QUALITY_CAP = 50;
+
+  private static async applyFormat(image: sharp.Sharp, edits: ImageEdits, isAnimation = false){
     try {
       const format = edits.toFormat || (await image.metadata()).format;
       const options = edits.quality ? { quality: edits.quality } : {};
+
+      // Lower quality for animated WebP. Sharp's default WebP quality is 80; cap
+      // it (or any caller-supplied higher value) to ANIMATED_WEBP_QUALITY_CAP. A
+      // caller-supplied lower value is honored as-is.
+      if (format === 'webp' && isAnimation) {
+        const currentQuality = options['quality'] ?? 80;
+        options['quality'] = Math.min(currentQuality, this.ANIMATED_WEBP_QUALITY_CAP);
+      }
 
       // Enable mozjpeg for JPEG to improve compression (10-15% smaller files)
       if (format === 'jpeg') {

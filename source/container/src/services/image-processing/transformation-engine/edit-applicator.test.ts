@@ -239,6 +239,42 @@ describe('EditApplicator', () => {
 
       expect(mockImage.toFormat).toHaveBeenCalledWith('heif', { compression: 'av1' });
     });
+
+    it('Should cap webp quality at 50 for animated content with no explicit quality', async () => {
+      const mockImage = createMockSharp({ width: 800, height: 600, format: 'gif', pages: 5 });
+      const edits: ImageEdits = { toFormat: 'webp' };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('webp', { quality: 50 });
+    });
+
+    it('Should cap webp quality at 50 for animated content when caller-supplied quality is higher', async () => {
+      const mockImage = createMockSharp({ width: 800, height: 600, format: 'gif', pages: 5 });
+      const edits: ImageEdits = { toFormat: 'webp', quality: 80 };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('webp', { quality: 50 });
+    });
+
+    it('Should honor caller-supplied webp quality when lower than the animated cap', async () => {
+      const mockImage = createMockSharp({ width: 800, height: 600, format: 'gif', pages: 5 });
+      const edits: ImageEdits = { toFormat: 'webp', quality: 40 };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('webp', { quality: 40 });
+    });
+
+    it('Should not cap webp quality for static (single-frame) content', async () => {
+      const mockImage = createMockSharp({ width: 800, height: 600, format: 'webp', pages: 1 });
+      const edits: ImageEdits = { toFormat: 'webp', quality: 80 };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('webp', { quality: 80 });
+    });
   });
 
   describe('calcOverlaySizeOption', () => {
