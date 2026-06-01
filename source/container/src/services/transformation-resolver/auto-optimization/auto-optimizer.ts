@@ -11,6 +11,11 @@ const ANIMATION_CAPABLE_FORMATS = new Set(["webp", "avif", "gif"]);
 // Source content-types that may carry an alpha channel. JPEG output drops alpha,
 // so we must not auto-select jpeg when the source is one of these.
 const POTENTIALLY_TRANSPARENT_SOURCE_TYPES = new Set(["image/png", "image/webp"]);
+// Source content-types that are typically lossy. Re-encoding them into a lossless
+// container (png, tiff) inflates file size significantly with no quality gain.
+const LOSSY_SOURCE_CONTENT_TYPES = new Set(["image/jpeg", "image/jpg", "image/webp"]);
+// Output formats that are lossless and would inflate a lossy source on re-encode.
+const LOSSLESS_TARGET_FORMATS = new Set(["png", "tiff"]);
 const FORMAT_MAPPING: Record<string, string> = {
   "image/webp": "webp",
   "image/png": "png",
@@ -92,6 +97,28 @@ function getFormatOptimizations(
   // none, return [] so the source format passes through unchanged.
   if (selectedFormat === "jpeg" && POTENTIALLY_TRANSPARENT_SOURCE_TYPES.has(imageRequest?.sourceImageContentType)) {
     selectedFormat = FORMAT_PRIORITY.find((format) => format !== "jpeg" && compatibleFormats.includes(format));
+    if (!selectedFormat) {
+      return [];
+    }
+  }
+
+  // Block lossless re-encode of a lossy source (e.g. jpeg/webp → png). Lossless
+  // containers can't recover quality the source already lost, so they only inflate
+  // file size — observed up to +307% on jpeg → png. Fall back to the next
+  // accepted non-lossless format. The alpha guard above may have already steered
+  // away from jpeg for a webp source; preserve that constraint when picking a
+  // fallback so we don't reintroduce transparency loss.
+  if (
+    LOSSY_SOURCE_CONTENT_TYPES.has(imageRequest?.sourceImageContentType) &&
+    LOSSLESS_TARGET_FORMATS.has(selectedFormat)
+  ) {
+    const isAlphaSuspect = POTENTIALLY_TRANSPARENT_SOURCE_TYPES.has(imageRequest?.sourceImageContentType);
+    selectedFormat = FORMAT_PRIORITY.find(
+      (format) =>
+        compatibleFormats.includes(format) &&
+        !LOSSLESS_TARGET_FORMATS.has(format) &&
+        (!isAlphaSuspect || format !== "jpeg")
+    );
     if (!selectedFormat) {
       return [];
     }

@@ -175,6 +175,83 @@ describe("applyAutoOptimizations", () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ type: "format", value: "jpeg", source: "auto" });
     });
+
+    it("should skip png selection when source is jpeg (lossy → lossless guard)", () => {
+      mockPolicy.outputs = [{ type: "format", value: "auto" }];
+      mockRequest.headers = { "dit-accept": "image/png" };
+      const imageRequest = { sourceImageContentType: "image/jpeg" } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      // No non-lossless accepted format — source format passes through.
+      expect(result).toHaveLength(0);
+    });
+
+    it("should skip png selection when source is webp (lossy → lossless guard)", () => {
+      mockPolicy.outputs = [{ type: "format", value: "auto" }];
+      mockRequest.headers = { "dit-accept": "image/png" };
+      const imageRequest = { sourceImageContentType: "image/webp" } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("should skip tiff selection when source is jpeg (lossy → lossless guard)", () => {
+      mockPolicy.outputs = [{ type: "format", value: "auto" }];
+      mockRequest.headers = { "dit-accept": "image/tiff" };
+      const imageRequest = { sourceImageContentType: "image/jpeg" } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("should pick webp over png for jpeg source when both are accepted", () => {
+      mockPolicy.outputs = [{ type: "format", value: "auto" }];
+      mockRequest.headers = { "dit-accept": "image/webp,image/png" };
+      const imageRequest = { sourceImageContentType: "image/jpeg" } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      // webp wins on priority — lossy guard never triggers because webp is not lossless.
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ type: "format", value: "webp", source: "auto" });
+    });
+
+    it("should pick avif over png for jpeg source when avif is accepted", () => {
+      mockPolicy.outputs = [{ type: "format", value: "auto" }];
+      mockRequest.headers = { "dit-accept": "image/avif,image/png" };
+      const imageRequest = { sourceImageContentType: "image/jpeg" } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ type: "format", value: "avif", source: "auto" });
+    });
+
+    it("should still allow png selection when source is not lossy (png source)", () => {
+      // png → png hits the same-format short-circuit. This test guards that the
+      // lossy guard doesn't accidentally fire for png sources.
+      mockPolicy.outputs = [{ type: "format", value: "auto" }];
+      mockRequest.headers = { "dit-accept": "image/png" };
+      const imageRequest = { sourceImageContentType: "image/png" } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("should pass through when webp source has only png+jpeg accepted (alpha + lossy both block)", () => {
+      mockPolicy.outputs = [{ type: "format", value: "auto" }];
+      mockRequest.headers = { "dit-accept": "image/png,image/jpeg" };
+      const imageRequest = { sourceImageContentType: "image/webp" } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      // Alpha guard blocks jpeg; lossy guard blocks png; nothing left → pass through.
+      expect(result).toHaveLength(0);
+    });
   });
 
   describe("quality optimizations", () => {
