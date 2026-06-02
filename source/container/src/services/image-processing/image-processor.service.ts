@@ -17,6 +17,12 @@ export class ImageProcessorService {
     this.originFetcher = new OriginFetcher();
   }
 
+  private static readonly ICO_CONTENT_TYPES = new Set(['image/x-icon', 'image/vnd.microsoft.icon']);
+
+  private static isIcoContentType(contentType: string | undefined): boolean {
+    return !!contentType && ImageProcessorService.ICO_CONTENT_TYPES.has(contentType.toLowerCase());
+  }
+
   public static getInstance(): ImageProcessorService {
     if (!ImageProcessorService.instance) {
       ImageProcessorService.instance = new ImageProcessorService();
@@ -43,7 +49,24 @@ export class ImageProcessorService {
         imageRequest.timings.imageProcessing.transformationApplicationMs = 0;
         return imageBuffer;
       }
-      
+
+      // ICO is a multi-resolution container, not a single-frame raster. Sharp has
+      // no ICO decoder and re-encoding would discard the bundled sizes anyway —
+      // serve the source bytes verbatim regardless of what transformations the
+      // policy requested.
+      if (ImageProcessorService.isIcoContentType(imageRequest.sourceImageContentType)) {
+        imageRequest.response.contentType = imageRequest.sourceImageContentType;
+        imageRequest.timings.imageProcessing.transformationApplicationMs = 0;
+        console.log(JSON.stringify({
+          requestId: imageRequest.requestId,
+          component: 'ImageProcessor',
+          operation: 'ico_passthrough',
+          contentType: imageRequest.sourceImageContentType,
+          sizeBytes: imageBuffer.length
+        }));
+        return imageBuffer;
+      }
+
       // Extract source dimensions to validate auto-resize transformations
       const metadata = await sharp(imageBuffer).metadata();
       this.preventAutoUpscaling(imageRequest, metadata.width);

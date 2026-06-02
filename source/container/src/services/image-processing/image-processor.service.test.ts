@@ -302,6 +302,80 @@ describe('ImageProcessorService', () => {
     });
   });
 
+  describe('ICO passthrough', () => {
+    // Minimal valid ICONDIR: reserved(2)=0, type(2)=1, count(2)=0 — plus a couple
+    // trailing bytes to be over the 4-byte minimum. The processor must not call
+    // Sharp on this, so the buffer never needs to be a real ICO.
+    const ICO_HEADER = Buffer.from([0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xAB, 0xCD]);
+
+    it('should pass ICO buffer through unchanged when transformations are present', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: ICO_HEADER,
+        metadata: { size: ICO_HEADER.length, format: 'x-icon' }
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: 'test-ico-passthrough',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/favicon.ico' },
+        sourceImageContentType: 'image/x-icon',
+        // Policy might have asked for resize/format conversion — must be ignored for ICO.
+        transformations: [{ type: 'resize', value: { width: 50 }, source: 'url' }],
+        response: { headers: {} }
+      };
+
+      const result = await service.process(request);
+
+      expect(result).toBe(ICO_HEADER);
+      expect(request.response.contentType).toBe('image/x-icon');
+      expect(request.timings.imageProcessing.transformationApplicationMs).toBe(0);
+    });
+
+    it('should pass ICO buffer through unchanged for image/vnd.microsoft.icon', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: ICO_HEADER,
+        metadata: { size: ICO_HEADER.length, format: 'vnd.microsoft.icon' }
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: 'test-ico-vnd-passthrough',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/favicon.ico' },
+        sourceImageContentType: 'image/vnd.microsoft.icon',
+        transformations: [{ type: 'resize', value: { width: 50 }, source: 'url' }],
+        response: { headers: {} }
+      };
+
+      const result = await service.process(request);
+
+      expect(result).toBe(ICO_HEADER);
+      expect(request.response.contentType).toBe('image/vnd.microsoft.icon');
+    });
+
+    it('should still process non-ICO sources normally', async () => {
+      // Regression guard: the ICO short-circuit must only fire for ICO content types.
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_JPEG_BUFFER,
+        metadata: { size: TEST_JPEG_BUFFER.length, format: 'jpeg' }
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: 'test-not-ico',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/image.jpg' },
+        sourceImageContentType: 'image/jpeg',
+        transformations: [{ type: 'resize', value: { width: 50 }, source: 'url' }],
+        response: { headers: {} }
+      };
+
+      const result = await service.process(request);
+
+      // Must be a transformed Sharp output, not the original buffer.
+      expect(result).not.toBe(TEST_JPEG_BUFFER);
+      expect(request.response.contentType).toMatch(/^image\//);
+    });
+  });
+
   describe('animated GIF handling', () => {
     it('should re-instantiate with animated=false for single-frame GIF', async () => {
       jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({

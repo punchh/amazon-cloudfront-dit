@@ -122,6 +122,28 @@ describe('applyAutoOptimizations', () => {
       expect(result[0]).toEqual({ type: 'format', value: 'jpeg', source: 'auto' });
     });
 
+    it('should skip format conversion when source is ICO (image/x-icon)', () => {
+      // ICO passes through downstream — picking a format here is wasted work
+      // and pollutes transformation logs.
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/webp,image/jpeg' };
+      const imageRequest = { sourceImageContentType: 'image/x-icon' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should skip format conversion when source is ICO (image/vnd.microsoft.icon)', () => {
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/webp,image/jpeg' };
+      const imageRequest = { sourceImageContentType: 'image/vnd.microsoft.icon' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(0);
+    });
+
 
   });
 

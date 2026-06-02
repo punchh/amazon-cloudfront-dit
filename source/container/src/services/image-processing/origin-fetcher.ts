@@ -148,13 +148,18 @@ export class OriginFetcher {
   private isValidImageContentType(contentType: string): boolean {
     const validTypes = [
       'image/jpeg',
-      'image/jpg', 
+      'image/jpg',
       'image/png',
       'image/webp',
       'image/gif',
       'image/tiff',
       'image/avif',
       'image/heif',
+      // ICO is accepted but bypasses the Sharp pipeline downstream (see
+      // ImageProcessorService — Sharp has no ICO decoder, and ICO is a
+      // multi-resolution bundle that must not be re-encoded).
+      'image/x-icon',
+      'image/vnd.microsoft.icon',
     ];
     return validTypes.some(type => contentType.toLowerCase().includes(type));
   }
@@ -169,11 +174,13 @@ export class OriginFetcher {
 
     const magicToFormat = {
       'FFD8FF': 'jpeg',
-      '89504E47': 'png', 
+      '89504E47': 'png',
       '47494638': 'gif',
       '52494646': 'webp',
       '49492A00': 'tiff',
-      '4D4D002A': 'tiff'
+      '4D4D002A': 'tiff',
+      // ICONDIR header: reserved(2)=0, type(2)=1 (icon) — 00 00 01 00 little-endian.
+      '00000100': 'ico'
     };
 
     const contentTypeToFormat = {
@@ -182,7 +189,9 @@ export class OriginFetcher {
       'image/jpeg': 'jpeg',
       'image/jpg': 'jpeg',
       'image/tiff': 'tiff',
-      'image/gif': 'gif'
+      'image/gif': 'gif',
+      'image/x-icon': 'ico',
+      'image/vnd.microsoft.icon': 'ico'
     };
 
     const fileHeader = buffer.subarray(0, 4).toString('hex').toUpperCase();

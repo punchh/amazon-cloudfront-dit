@@ -8,6 +8,10 @@ import { ImageProcessingRequest } from '../../../types/image-processing-request'
 const FORMAT_PRIORITY = ['webp', 'avif', 'jpeg', 'png', 'heif', 'tiff', 'raw', 'gif'];
 // TODO, DISCUSS WITH TEAM FOR OPTIMAL FORMAT PRIORITIY LIST
 const ANIMATION_CAPABLE_FORMATS = new Set(['webp', 'avif', 'gif']);
+// Source content-types that Sharp cannot decode and must pass through unchanged.
+// The image-processor short-circuits these, so any format optimization picked
+// here would be discarded — skip it for log/metric clarity.
+const PASSTHROUGH_SOURCE_CONTENT_TYPES = new Set(['image/x-icon', 'image/vnd.microsoft.icon']);
 const FORMAT_MAPPING: Record<string, string> = {
   'image/webp': 'webp',
   'image/png': 'png',
@@ -69,11 +73,18 @@ function getFormatOptimizations(req: Request, formatConfig: any, imageRequest?: 
     .map(mimeType => FORMAT_MAPPING[mimeType]);
   
   const selectedFormat = FORMAT_PRIORITY.find(format => compatibleFormats.includes(format));
-  
+
   if (!selectedFormat) {
     return [];
   }
-  
+
+  // ICO sources pass through unchanged downstream (Sharp can't decode them and
+  // re-encoding would destroy the multi-resolution bundle). Skip the format
+  // optimization so it doesn't appear in transformation logs as if it were applied.
+  if (PASSTHROUGH_SOURCE_CONTENT_TYPES.has(imageRequest?.sourceImageContentType)) {
+    return [];
+  }
+
   // Skip format conversion if source is a GIF and selected format cannot carry animation
   const sourceIsGif = imageRequest?.sourceImageContentType === 'image/gif';
   if (sourceIsGif && !ANIMATION_CAPABLE_FORMATS.has(selectedFormat)) {

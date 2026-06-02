@@ -27,6 +27,11 @@ describe('OriginFetcher', () => {
     it('should handle case insensitive content types', () => {
       expect(fetcher['isValidImageContentType']('IMAGE/JPEG')).toBe(true);
     });
+
+    it('should accept ICO content types', () => {
+      expect(fetcher['isValidImageContentType']('image/x-icon')).toBe(true);
+      expect(fetcher['isValidImageContentType']('image/vnd.microsoft.icon')).toBe(true);
+    });
   });
 
   describe('error handling', () => {
@@ -100,6 +105,23 @@ describe('OriginFetcher', () => {
       const malformedPngBuffer = Buffer.from([0x89, 0x50, 0x4E, 0x46]); // Should be 0x47, not 0x46
       expect(() => fetcher['validateImageMagicNumbers'](malformedPngBuffer, 'image/png', 'https://example.com/test.png'))
         .toThrow('Invalid image file');
+    });
+
+    it('should accept ICO magic numbers with image/x-icon content-type', () => {
+      // ICONDIR header: 00 00 01 00
+      const icoBuffer = Buffer.from([0x00, 0x00, 0x01, 0x00]);
+      expect(() => fetcher['validateImageMagicNumbers'](icoBuffer, 'image/x-icon', 'https://example.com/test.ico')).not.toThrow();
+    });
+
+    it('should accept ICO magic numbers with image/vnd.microsoft.icon content-type', () => {
+      const icoBuffer = Buffer.from([0x00, 0x00, 0x01, 0x00]);
+      expect(() => fetcher['validateImageMagicNumbers'](icoBuffer, 'image/vnd.microsoft.icon', 'https://example.com/test.ico')).not.toThrow();
+    });
+
+    it('should reject content-type mismatch when ICO bytes are served as image/png', () => {
+      const icoBuffer = Buffer.from([0x00, 0x00, 0x01, 0x00]);
+      expect(() => fetcher['validateImageMagicNumbers'](icoBuffer, 'image/png', 'https://example.com/test.png'))
+        .toThrow('Content-Type mismatch');
     });
   });
 
