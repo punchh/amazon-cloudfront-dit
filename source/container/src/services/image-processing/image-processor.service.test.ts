@@ -388,6 +388,86 @@ describe('ImageProcessorService', () => {
     });
   });
 
+  describe('APNG passthrough', () => {
+    // Minimal-but-valid leading PNG signature + IHDR + acTL chunk. The pipeline
+    // only sniffs the prefix — the chunks past acTL don't have to decode.
+    // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+    // IHDR chunk: length(4)=0x0D type(4)='IHDR' data(13) crc(4) — 25 bytes
+    // acTL chunk: length(4)=0x08 type(4)='acTL' data(8) crc(4) — 20 bytes
+    const APNG_HEADER = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), // PNG sig
+      Buffer.from([0x00, 0x00, 0x00, 0x0d]), // IHDR length
+      Buffer.from('IHDR', 'ascii'),
+      Buffer.alloc(13 + 4), // IHDR data + crc (dummy)
+      Buffer.from([0x00, 0x00, 0x00, 0x08]), // acTL length
+      Buffer.from('acTL', 'ascii'),
+      Buffer.alloc(8 + 4), // acTL data + crc (dummy)
+    ]);
+    const STATIC_PNG_HEADER = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from([0x00, 0x00, 0x00, 0x0d]),
+      Buffer.from('IHDR', 'ascii'),
+      Buffer.alloc(13 + 4),
+      // No acTL chunk — straight to IDAT in real files
+    ]);
+
+    it('should detect acTL chunk in APNG buffer', () => {
+      expect(ImageProcessorService['isAnimatedPng'](APNG_HEADER)).toBe(true);
+    });
+
+    it('should return false for a static PNG buffer (no acTL chunk)', () => {
+      expect(ImageProcessorService['isAnimatedPng'](STATIC_PNG_HEADER)).toBe(false);
+    });
+
+    it('should pass APNG buffer through unchanged when transformations are present', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: APNG_HEADER,
+        metadata: { size: APNG_HEADER.length, format: 'png' }
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: 'test-apng-passthrough',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/animated.png' },
+        sourceImageContentType: 'image/png',
+        // Even with a resize requested, we serve the source verbatim — Sharp
+        // would strip animation on output otherwise.
+        transformations: [{ type: 'resize', value: { width: 50 }, source: 'url' }],
+        response: { headers: {} }
+      };
+
+      const result = await service.process(request);
+
+      expect(result).toBe(APNG_HEADER);
+      expect(request.response.contentType).toBe('image/png');
+      expect(request.timings.imageProcessing.transformationApplicationMs).toBe(0);
+    });
+
+    it('should still process static PNG through Sharp', async () => {
+      // Regression guard: only APNG short-circuits; static PNG must reach the
+      // Sharp pipeline.
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_PNG_BUFFER,
+        metadata: { size: TEST_PNG_BUFFER.length, format: 'png' }
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: 'test-static-png-not-passthrough',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/static.png' },
+        sourceImageContentType: 'image/png',
+        transformations: [{ type: 'resize', value: { width: 50 }, source: 'url' }],
+        response: { headers: {} }
+      };
+
+      const result = await service.process(request);
+
+      // Must be the Sharp output, not the original buffer.
+      expect(result).not.toBe(TEST_PNG_BUFFER);
+      expect(request.response.contentType).toBe('image/png');
+    });
+  });
+
   describe('animation-capable source detection', () => {
     // isAnimationCapableSource is the gate that decides whether Sharp is
     // instantiated with animated:true. Without animated:true, the ANIM (WebP)

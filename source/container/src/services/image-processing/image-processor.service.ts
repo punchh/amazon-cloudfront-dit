@@ -36,6 +36,16 @@ export class ImageProcessorService {
     return !!contentType && ImageProcessorService.ANIMATION_CAPABLE_SOURCE_TYPES.has(contentType.toLowerCase());
   }
 
+  // APNG is a PNG with an 'acTL' chunk preceding the first IDAT. Sharp 0.34.x
+  // cannot read APNG as multi-frame nor write animated PNG output, so any
+  // pipeline operation silently strips animation. We sniff a bounded prefix of
+  // the buffer — acTL is always near the top of the file in practice.
+  private static isAnimatedPng(buffer: Buffer): boolean {
+    const SCAN_LIMIT = 4096;
+    const head = buffer.subarray(0, Math.min(buffer.length, SCAN_LIMIT));
+    return head.indexOf('acTL', 0, 'ascii') !== -1;
+  }
+
   public static getInstance(): ImageProcessorService {
     if (!ImageProcessorService.instance) {
       ImageProcessorService.instance = new ImageProcessorService();
@@ -74,6 +84,26 @@ export class ImageProcessorService {
           requestId: imageRequest.requestId,
           component: 'ImageProcessor',
           operation: 'ico_passthrough',
+          contentType: imageRequest.sourceImageContentType,
+          sizeBytes: imageBuffer.length
+        }));
+        return imageBuffer;
+      }
+
+      // APNG passthrough. Sharp can neither read APNG as multi-frame nor write
+      // animated PNG output, so any transformation would silently strip
+      // animation. Serve the source bytes verbatim — we lose the ability to
+      // resize APNG, but preserve animation which is the user-visible bug.
+      if (
+        imageRequest.sourceImageContentType?.toLowerCase() === 'image/png' &&
+        ImageProcessorService.isAnimatedPng(imageBuffer)
+      ) {
+        imageRequest.response.contentType = imageRequest.sourceImageContentType;
+        imageRequest.timings.imageProcessing.transformationApplicationMs = 0;
+        console.log(JSON.stringify({
+          requestId: imageRequest.requestId,
+          component: 'ImageProcessor',
+          operation: 'apng_passthrough',
           contentType: imageRequest.sourceImageContentType,
           sizeBytes: imageBuffer.length
         }));
