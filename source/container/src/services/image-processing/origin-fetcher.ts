@@ -205,7 +205,11 @@ export class OriginFetcher {
     }
 
     if (contentType) {
-      const expectedFormat = contentTypeToFormat[contentType.toLowerCase()];
+      // Strip parameters (`image/png; charset=utf-8` → `image/png`) before
+      // the lookup. Without this, parameterized headers silently bypass magic-
+      // number validation, allowing mismatched buffers through.
+      const bareContentType = contentType.split(';')[0].trim().toLowerCase();
+      const expectedFormat = contentTypeToFormat[bareContentType];
       // If no expectedFormat found, skip magic number validation
       if (expectedFormat) {
         if (!detectedFormat) {

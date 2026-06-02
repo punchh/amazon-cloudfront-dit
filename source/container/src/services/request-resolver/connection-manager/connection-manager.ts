@@ -12,10 +12,23 @@ export class ConnectionManager {
   private static readonly TIMEOUT_MS = 5000;
   private readonly s3Client = new S3Client(getOptions());
 
+  // Validates a Content-Type that has already been normalized (stripped of
+  // parameters + lowercased). Operates on the normalized form so uppercase
+  // and parameterized headers are accepted instead of incorrectly rejected.
   private validateContentType(contentType: string | undefined): void {
-    if (!contentType?.split(';')[0].trim().startsWith('image/')) {
+    if (!contentType?.startsWith('image/')) {
       throw new ConnectionError('Invalid content type', `Origin does not serve image content. Content-Type: ${contentType}`, 400, 'INVALID_FORMAT');
     }
+  }
+
+  // Origin Content-Type can include parameters (e.g. `image/jpeg; charset=utf-8`)
+  // and varying case. Downstream lookups use exact-match Set / object key
+  // comparisons, so we strip the parameter list, trim, and lowercase here at
+  // the boundary — every consumer sees a single canonical form.
+  private static normalizeContentType(contentType: string | undefined): string | undefined {
+    if (!contentType) return undefined;
+    const bare = contentType.split(';')[0].trim().toLowerCase();
+    return bare || undefined;
   }
 
   private async validateS3Origin(url: string, imageRequest: ImageProcessingRequest): Promise<void> {
@@ -36,10 +49,10 @@ export class ConnectionManager {
       const command = new HeadObjectCommand(commandInput);
       const response = await this.s3Client.send(command);
       
-      const contentType = response.ContentType;
-      this.validateContentType(contentType);
+      const normalized = ConnectionManager.normalizeContentType(response.ContentType);
+      this.validateContentType(normalized);
       if (imageRequest) {
-        imageRequest.sourceImageContentType = contentType;
+        imageRequest.sourceImageContentType = normalized;
       }
     } catch (error: any) {
       const statusCode = error?.$metadata?.httpStatusCode;
@@ -87,10 +100,10 @@ export class ConnectionManager {
         throw new ConnectionError('Origin validation failed', `Origin returned status ${status} for ${url}`, 502, 'BAD_GATEWAY');
       }
 
-      const contentType = response.headers.get('content-type') ?? undefined;
-      this.validateContentType(contentType);
+      const normalized = ConnectionManager.normalizeContentType(response.headers.get('content-type') ?? undefined);
+      this.validateContentType(normalized);
       if (imageRequest) {
-        imageRequest.sourceImageContentType = contentType;
+        imageRequest.sourceImageContentType = normalized;
       }
     } catch (error) {
       clearTimeout(timeoutId);

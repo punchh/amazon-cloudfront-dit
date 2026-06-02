@@ -123,6 +123,27 @@ describe('OriginFetcher', () => {
       expect(() => fetcher['validateImageMagicNumbers'](icoBuffer, 'image/png', 'https://example.com/test.png'))
         .toThrow('Content-Type mismatch');
     });
+
+    it('should still apply magic-number validation when Content-Type includes parameters', () => {
+      // Without parameter stripping, the contentTypeToFormat lookup returns
+      // undefined for `image/png; charset=utf-8` and validation is silently
+      // skipped — letting a content/buffer mismatch slip through to Sharp.
+      const pngBuffer = Buffer.from([0x89, 0x50, 0x4E, 0x47]);
+      expect(() => fetcher['validateImageMagicNumbers'](pngBuffer, 'image/png; charset=utf-8', 'https://example.com/test.png'))
+        .not.toThrow();
+    });
+
+    it('should reject content-type mismatch when JPEG bytes are served as parameterized image/png', () => {
+      const jpegBuffer = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]);
+      expect(() => fetcher['validateImageMagicNumbers'](jpegBuffer, 'image/png; charset=utf-8', 'https://example.com/test.png'))
+        .toThrow('Content-Type mismatch');
+    });
+
+    it('should treat uppercase parameterized Content-Type as a known format', () => {
+      const pngBuffer = Buffer.from([0x89, 0x50, 0x4E, 0x47]);
+      expect(() => fetcher['validateImageMagicNumbers'](pngBuffer, 'IMAGE/PNG; charset=utf-8', 'https://example.com/test.png'))
+        .not.toThrow();
+    });
   });
 
   describe('fetchImage', () => {

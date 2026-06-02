@@ -91,7 +91,10 @@ describe('ConnectionManager', () => {
         });
     });
 
-    it('should accept image content type with charset', async () => {
+    it('should normalize content-type with parameters before storing on imageRequest', async () => {
+      // Downstream consumers (image-processor ICO/animation guards, auto-optimizer
+      // FORMAT_MAPPING) use exact-match lookups. Parameters and casing on the raw
+      // header would silently bypass those guards — normalize at this boundary.
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -99,7 +102,38 @@ describe('ConnectionManager', () => {
       });
 
       await connectionManager.validateOriginUrl('https://example.com/image.jpg', mockImageRequest);
-      expect(mockImageRequest.sourceImageContentType).toBe('image/jpeg; charset=utf-8');
+      expect(mockImageRequest.sourceImageContentType).toBe('image/jpeg');
+    });
+
+    it('should normalize uppercase content-type to lowercase', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'IMAGE/PNG' })
+      });
+
+      await connectionManager.validateOriginUrl('https://example.com/image.png', mockImageRequest);
+      expect(mockImageRequest.sourceImageContentType).toBe('image/png');
+    });
+
+    it('should normalize content-type with extra whitespace and parameters', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': '  image/x-icon ; charset=binary  ' })
+      });
+
+      await connectionManager.validateOriginUrl('https://example.com/favicon.ico', mockImageRequest);
+      expect(mockImageRequest.sourceImageContentType).toBe('image/x-icon');
+    });
+
+    it('should normalize content-type from S3 with parameters', async () => {
+      (S3UrlHelper.isS3Url as jest.Mock).mockReturnValue(true);
+      (S3UrlHelper.parseS3Url as jest.Mock).mockReturnValue({ bucket: 'test-bucket', key: 'test-key.png' });
+      mockS3Send.mockResolvedValue({ ContentType: 'image/webp; charset=utf-8' });
+
+      await connectionManager.validateOriginUrl('https://bucket.s3.amazonaws.com/key.png', mockImageRequest);
+      expect(mockImageRequest.sourceImageContentType).toBe('image/webp');
     });
 
     it('should pass clientHeaders to fetch', async () => {
