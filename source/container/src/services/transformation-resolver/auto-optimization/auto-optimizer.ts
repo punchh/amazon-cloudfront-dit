@@ -8,6 +8,12 @@ import { ImageProcessingRequest } from '../../../types/image-processing-request'
 const FORMAT_PRIORITY = ['webp', 'avif', 'jpeg', 'png', 'heif', 'tiff', 'raw', 'gif'];
 // TODO, DISCUSS WITH TEAM FOR OPTIMAL FORMAT PRIORITIY LIST
 const ANIMATION_CAPABLE_FORMATS = new Set(['webp', 'avif', 'gif']);
+// Source content-types whose container can carry multi-frame animation. We
+// can't tell pre-fetch whether the file actually is animated, so we behave
+// conservatively: if the client only accepts a non-animation-capable target
+// (e.g. jpeg), skip the format conversion so any possible animation survives.
+// Matches the set in ImageProcessorService.ANIMATION_CAPABLE_SOURCE_TYPES.
+const ANIMATION_CAPABLE_SOURCE_CONTENT_TYPES = new Set(['image/gif', 'image/webp', 'image/png']);
 // Source content-types that Sharp cannot decode and must pass through unchanged.
 // The image-processor short-circuits these, so any format optimization picked
 // here would be discarded — skip it for log/metric clarity.
@@ -85,9 +91,15 @@ function getFormatOptimizations(req: Request, formatConfig: any, imageRequest?: 
     return [];
   }
 
-  // Skip format conversion if source is a GIF and selected format cannot carry animation
-  const sourceIsGif = imageRequest?.sourceImageContentType === 'image/gif';
-  if (sourceIsGif && !ANIMATION_CAPABLE_FORMATS.has(selectedFormat)) {
+  // Skip format conversion when the source container can carry animation (gif,
+  // webp, png/APNG) and the selected target cannot. We can't distinguish
+  // static-vs-animated pre-fetch, so we err on the side of preserving any
+  // possible animation; the image-processor verifies multi-frame downstream
+  // and a static source still emits the source format unchanged.
+  if (
+    ANIMATION_CAPABLE_SOURCE_CONTENT_TYPES.has(imageRequest?.sourceImageContentType) &&
+    !ANIMATION_CAPABLE_FORMATS.has(selectedFormat)
+  ) {
     return [];
   }
 

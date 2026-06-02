@@ -111,15 +111,63 @@ describe('applyAutoOptimizations', () => {
       expect(result[0]).toEqual({ type: 'format', value: 'avif', source: 'auto' });
     });
 
-    it('should not restrict format selection for non-GIF sources', () => {
+    it('should not restrict format selection for non-animation-capable sources', () => {
+      // JPEG is single-frame by definition — the animation guard should not fire.
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/jpeg' };
+      const imageRequest = { sourceImageContentType: 'image/jpeg' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      // jpeg→jpeg hits the same-format short-circuit.
+      expect(result).toHaveLength(0);
+    });
+
+    it('should skip format conversion when source is WebP and selected format is not animation-capable', () => {
+      // WebP container can carry animation (ANIM chunk). Block jpeg selection so
+      // any animation in the source survives.
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/jpeg' };
+      const imageRequest = { sourceImageContentType: 'image/webp' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should allow WebP → AVIF (both animation-capable)', () => {
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/avif' };
+      const imageRequest = { sourceImageContentType: 'image/webp' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ type: 'format', value: 'avif', source: 'auto' });
+    });
+
+    it('should skip format conversion when source is PNG and selected format is not animation-capable', () => {
+      // PNG container can carry animation (acTL chunk → APNG). Block jpeg
+      // selection so APNG animation survives — static PNGs still pass through
+      // unchanged when the image-processor sees pages <= 1.
       mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
       mockRequest.headers = { 'dit-accept': 'image/jpeg' };
       const imageRequest = { sourceImageContentType: 'image/png' } as ImageProcessingRequest;
 
       const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
 
+      expect(result).toHaveLength(0);
+    });
+
+    it('should allow PNG → WebP (animation-capable)', () => {
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/webp' };
+      const imageRequest = { sourceImageContentType: 'image/png' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ type: 'format', value: 'jpeg', source: 'auto' });
+      expect(result[0]).toEqual({ type: 'format', value: 'webp', source: 'auto' });
     });
 
     it('should skip format conversion when source is ICO (image/x-icon)', () => {

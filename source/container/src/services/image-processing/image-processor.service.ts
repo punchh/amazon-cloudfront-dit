@@ -18,9 +18,22 @@ export class ImageProcessorService {
   }
 
   private static readonly ICO_CONTENT_TYPES = new Set(['image/x-icon', 'image/vnd.microsoft.icon']);
+  // Content-types whose containers can carry multiple frames. WebP advertises
+  // animation via an ANIM chunk; PNG via the acTL chunk (APNG). Sharp needs
+  // animated: true at instantiation to surface those frames — without it the
+  // ANIM/acTL chunks are ignored and we silently drop animation on first encode.
+  private static readonly ANIMATION_CAPABLE_SOURCE_TYPES = new Set([
+    'image/gif',
+    'image/webp',
+    'image/png',
+  ]);
 
   private static isIcoContentType(contentType: string | undefined): boolean {
     return !!contentType && ImageProcessorService.ICO_CONTENT_TYPES.has(contentType.toLowerCase());
+  }
+
+  private static isAnimationCapableSource(contentType: string | undefined): boolean {
+    return !!contentType && ImageProcessorService.ANIMATION_CAPABLE_SOURCE_TYPES.has(contentType.toLowerCase());
   }
 
   public static getInstance(): ImageProcessorService {
@@ -67,13 +80,20 @@ export class ImageProcessorService {
         return imageBuffer;
       }
 
+      // Whether to read the source as multi-frame. Must be decided before the
+      // metadata probe — Sharp only surfaces ANIM (WebP) / acTL (APNG) frame
+      // counts when instantiated with animated: true, so probing without the
+      // flag would report pages=1 for APNG and trigger an incorrect reset
+      // downstream.
+      const isExpectedToBeAnimated = ImageProcessorService.isAnimationCapableSource(imageRequest.sourceImageContentType);
+
       // Extract source dimensions to validate auto-resize transformations
-      const metadata = await sharp(imageBuffer).metadata();
+      const metadata = await sharp(imageBuffer, { animated: isExpectedToBeAnimated }).metadata();
       this.preventAutoUpscaling(imageRequest, metadata.width);
-      
+
       // We need to map Transformations to Edits before Sharp image instantiation because it influences whether or not we strip or keep metadata
       const imageEdits = await TransformationMapper.mapToImageEdits(imageRequest.transformations);
-      
+
       console.log(JSON.stringify({
         requestId: imageRequest.requestId,
         component: 'TransformationMapper',
@@ -82,7 +102,6 @@ export class ImageProcessorService {
         editCount: Object.keys(imageEdits).length
       }));
 
-      const isExpectedToBeAnimated = imageRequest.sourceImageContentType == 'image/gif';
       let sharpOptions = {
         failOnError: true,
         animated: isExpectedToBeAnimated

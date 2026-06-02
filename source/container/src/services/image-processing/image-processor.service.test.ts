@@ -10,16 +10,28 @@ import sharp from 'sharp';
 
 let TEST_JPEG_BUFFER: Buffer;
 let TEST_GIF_BUFFER: Buffer;
+let TEST_WEBP_BUFFER: Buffer;
+let TEST_PNG_BUFFER: Buffer;
 
 beforeAll(async () => {
   // Generate valid test images using Sharp
   TEST_JPEG_BUFFER = await sharp({
     create: { width: 100, height: 100, channels: 3, background: { r: 255, g: 0, b: 0 } }
   }).jpeg().toBuffer();
-  
+
   TEST_GIF_BUFFER = await sharp({
     create: { width: 100, height: 100, channels: 3, background: { r: 0, g: 0, b: 255 } }
   }).gif().toBuffer();
+
+  // Single-frame WebP/PNG — used to exercise the "animation-capable source type
+  // but pages<=1" reset path under the broadened isExpectedToBeAnimated check.
+  TEST_WEBP_BUFFER = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: { r: 0, g: 255, b: 0 } }
+  }).webp().toBuffer();
+
+  TEST_PNG_BUFFER = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: { r: 128, g: 128, b: 128 } }
+  }).png().toBuffer();
 });
 
 describe('ImageProcessorService', () => {
@@ -372,6 +384,77 @@ describe('ImageProcessorService', () => {
 
       // Must be a transformed Sharp output, not the original buffer.
       expect(result).not.toBe(TEST_JPEG_BUFFER);
+      expect(request.response.contentType).toMatch(/^image\//);
+    });
+  });
+
+  describe('animation-capable source detection', () => {
+    // isAnimationCapableSource is the gate that decides whether Sharp is
+    // instantiated with animated:true. Without animated:true, the ANIM (WebP)
+    // and acTL (APNG) chunks are ignored and animation is silently lost.
+    it('should classify GIF as animation-capable', () => {
+      expect(ImageProcessorService['isAnimationCapableSource']('image/gif')).toBe(true);
+    });
+
+    it('should classify WebP as animation-capable (covers animated WebP)', () => {
+      expect(ImageProcessorService['isAnimationCapableSource']('image/webp')).toBe(true);
+    });
+
+    it('should classify PNG as animation-capable (covers APNG)', () => {
+      expect(ImageProcessorService['isAnimationCapableSource']('image/png')).toBe(true);
+    });
+
+    it('should classify JPEG as not animation-capable', () => {
+      expect(ImageProcessorService['isAnimationCapableSource']('image/jpeg')).toBe(false);
+    });
+
+    it('should be case-insensitive', () => {
+      expect(ImageProcessorService['isAnimationCapableSource']('IMAGE/WEBP')).toBe(true);
+    });
+
+    it('should handle undefined content type', () => {
+      expect(ImageProcessorService['isAnimationCapableSource'](undefined)).toBe(false);
+    });
+
+    it('should process a single-frame WebP source (animated reset path)', async () => {
+      // Regression guard: with isExpectedToBeAnimated=true for WebP, a static
+      // WebP must still reach the reset path (pages<=1) and produce output.
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_WEBP_BUFFER,
+        metadata: { size: TEST_WEBP_BUFFER.length, format: 'webp' }
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: 'test-static-webp',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/image.webp' },
+        sourceImageContentType: 'image/webp',
+        transformations: [{ type: 'resize', value: { width: 50 }, source: 'url' }],
+        response: { headers: {} }
+      };
+
+      const result = await service.process(request);
+      expect(result).toBeInstanceOf(Buffer);
+      expect(request.response.contentType).toMatch(/^image\//);
+    });
+
+    it('should process a single-frame PNG source (animated reset path)', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_PNG_BUFFER,
+        metadata: { size: TEST_PNG_BUFFER.length, format: 'png' }
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: 'test-static-png',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/image.png' },
+        sourceImageContentType: 'image/png',
+        transformations: [{ type: 'resize', value: { width: 50 }, source: 'url' }],
+        response: { headers: {} }
+      };
+
+      const result = await service.process(request);
+      expect(result).toBeInstanceOf(Buffer);
       expect(request.response.contentType).toMatch(/^image\//);
     });
   });
