@@ -38,12 +38,30 @@ export class ImageProcessorService {
 
   // APNG is a PNG with an 'acTL' chunk preceding the first IDAT. Sharp 0.34.x
   // cannot read APNG as multi-frame nor write animated PNG output, so any
-  // pipeline operation silently strips animation. We sniff a bounded prefix of
-  // the buffer — acTL is always near the top of the file in practice.
+  // pipeline operation silently strips animation.
+  //
+  // We walk the actual chunk stream rather than substring-sniffing. A naive
+  // indexOf('acTL') can false-positive on a tEXt chunk that happens to use
+  // 'acTL' as a keyword, or on coincidental bytes inside compressed IDAT data —
+  // and would then silently passthrough a perfectly resizable static PNG.
   private static isAnimatedPng(buffer: Buffer): boolean {
-    const SCAN_LIMIT = 4096;
-    const head = buffer.subarray(0, Math.min(buffer.length, SCAN_LIMIT));
-    return head.indexOf('acTL', 0, 'ascii') !== -1;
+    const PNG_SIGNATURE_LENGTH = 8;
+    // Bound the walk to a sane limit; acTL must appear before IDAT in real
+    // APNG files, which in practice puts it well within the first few KB.
+    const SCAN_LIMIT = 64 * 1024;
+    const end = Math.min(buffer.length, SCAN_LIMIT);
+    let i = PNG_SIGNATURE_LENGTH;
+    // Each chunk: length(4) + type(4) + data(length) + crc(4)
+    while (i + 8 <= end) {
+      const length = buffer.readUInt32BE(i);
+      const type = buffer.toString('ascii', i + 4, i + 8);
+      if (type === 'acTL') return true;
+      if (type === 'IDAT') return false; // per spec, acTL must precede IDAT
+      i += 12 + length;
+      // Guard against truncation / length-field corruption causing infinite loop.
+      if (length > end || i < 0) return false;
+    }
+    return false;
   }
 
   public static getInstance(): ImageProcessorService {

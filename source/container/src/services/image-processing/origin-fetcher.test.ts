@@ -32,6 +32,25 @@ describe('OriginFetcher', () => {
       expect(fetcher['isValidImageContentType']('image/x-icon')).toBe(true);
       expect(fetcher['isValidImageContentType']('image/vnd.microsoft.icon')).toBe(true);
     });
+
+    it('should accept parameterized content types (strip params)', () => {
+      expect(fetcher['isValidImageContentType']('image/jpeg; charset=utf-8')).toBe(true);
+      expect(fetcher['isValidImageContentType']('  image/png  ;  q=0.9  ')).toBe(true);
+      expect(fetcher['isValidImageContentType']('image/x-icon; charset=binary')).toBe(true);
+    });
+
+    it('should reject substring-match impostors that the previous includes() check would allow', () => {
+      // Substring matching previously accepted these; exact-match closes the hole.
+      expect(fetcher['isValidImageContentType']('application/image/jpeg')).toBe(false);
+      expect(fetcher['isValidImageContentType']('image/pngfoo')).toBe(false);
+      expect(fetcher['isValidImageContentType']('image/jpegabc')).toBe(false);
+      expect(fetcher['isValidImageContentType']('foo image/png bar')).toBe(false);
+    });
+
+    it('should reject unknown image subtypes', () => {
+      expect(fetcher['isValidImageContentType']('image/svg+xml')).toBe(false);
+      expect(fetcher['isValidImageContentType']('image/bmp')).toBe(false);
+    });
   });
 
   describe('error handling', () => {

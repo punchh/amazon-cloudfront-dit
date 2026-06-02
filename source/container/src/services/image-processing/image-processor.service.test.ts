@@ -411,12 +411,63 @@ describe('ImageProcessorService', () => {
       // No acTL chunk — straight to IDAT in real files
     ]);
 
+    // PNG with a tEXt chunk that uses 'acTL' as its keyword content. A naive
+    // substring scan would false-positive here; the chunk parser must not.
+    // tEXt chunk: length(4) + 'tEXt' + data(length) + crc(4)
+    const PNG_WITH_TEXT_ACTL_KEYWORD = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from([0x00, 0x00, 0x00, 0x0d]),
+      Buffer.from('IHDR', 'ascii'),
+      Buffer.alloc(13 + 4),
+      // tEXt chunk carrying the literal bytes 'acTL' as data
+      Buffer.from([0x00, 0x00, 0x00, 0x04]), // tEXt length = 4 bytes
+      Buffer.from('tEXt', 'ascii'),
+      Buffer.from('acTL', 'ascii'), // 4 bytes of data — the false-positive trap
+      Buffer.alloc(4), // crc
+    ]);
+
+    // IHDR -> IDAT -> trailing 'acTL' bytes. APNG spec requires acTL to appear
+    // BEFORE the first IDAT — the parser must stop scanning at IDAT.
+    const PNG_WITH_ACTL_AFTER_IDAT = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from([0x00, 0x00, 0x00, 0x0d]),
+      Buffer.from('IHDR', 'ascii'),
+      Buffer.alloc(13 + 4),
+      Buffer.from([0x00, 0x00, 0x00, 0x08]),
+      Buffer.from('IDAT', 'ascii'),
+      Buffer.alloc(8 + 4),
+      Buffer.from([0x00, 0x00, 0x00, 0x08]),
+      Buffer.from('acTL', 'ascii'),
+      Buffer.alloc(8 + 4),
+    ]);
+
     it('should detect acTL chunk in APNG buffer', () => {
       expect(ImageProcessorService['isAnimatedPng'](APNG_HEADER)).toBe(true);
     });
 
     it('should return false for a static PNG buffer (no acTL chunk)', () => {
       expect(ImageProcessorService['isAnimatedPng'](STATIC_PNG_HEADER)).toBe(false);
+    });
+
+    it('should not false-positive when acTL appears as tEXt chunk data', () => {
+      // A naive substring scan over the buffer would find "acTL" and incorrectly
+      // mark the file as animated.
+      expect(ImageProcessorService['isAnimatedPng'](PNG_WITH_TEXT_ACTL_KEYWORD)).toBe(false);
+    });
+
+    it('should stop scanning at IDAT (acTL after IDAT is spec-invalid)', () => {
+      expect(ImageProcessorService['isAnimatedPng'](PNG_WITH_ACTL_AFTER_IDAT)).toBe(false);
+    });
+
+    it('should handle truncated buffers without infinite looping', () => {
+      // Length field claims more bytes than exist — must terminate, not loop or throw.
+      const truncated = Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        Buffer.from([0xff, 0xff, 0xff, 0xff]), // length claims 4GB
+        Buffer.from('IHDR', 'ascii'),
+        Buffer.alloc(2), // truncated data
+      ]);
+      expect(ImageProcessorService['isAnimatedPng'](truncated)).toBe(false);
     });
 
     it('should pass APNG buffer through unchanged when transformations are present', async () => {

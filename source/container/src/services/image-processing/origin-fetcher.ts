@@ -145,23 +145,28 @@ export class OriginFetcher {
 
 
 
+  // ICO is accepted but bypasses the Sharp pipeline downstream (see
+  // ImageProcessorService — Sharp has no ICO decoder, and ICO is a
+  // multi-resolution bundle that must not be re-encoded).
+  private static readonly VALID_IMAGE_CONTENT_TYPES = new Set([
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/tiff',
+    'image/avif',
+    'image/heif',
+    'image/x-icon',
+    'image/vnd.microsoft.icon',
+  ]);
+
+  // Strip Content-Type parameters and lowercase, then exact-match against the
+  // allowlist. Substring matching (the previous behavior) would let through
+  // `application/image/jpeg`, `image/pngfoo`, and other malformed types.
   private isValidImageContentType(contentType: string): boolean {
-    const validTypes = [
-      'image/jpeg',
-      'image/jpg',
-      'image/png',
-      'image/webp',
-      'image/gif',
-      'image/tiff',
-      'image/avif',
-      'image/heif',
-      // ICO is accepted but bypasses the Sharp pipeline downstream (see
-      // ImageProcessorService — Sharp has no ICO decoder, and ICO is a
-      // multi-resolution bundle that must not be re-encoded).
-      'image/x-icon',
-      'image/vnd.microsoft.icon',
-    ];
-    return validTypes.some(type => contentType.toLowerCase().includes(type));
+    const bare = contentType.split(';')[0].trim().toLowerCase();
+    return OriginFetcher.VALID_IMAGE_CONTENT_TYPES.has(bare);
   }
 
   private validateImageMagicNumbers(buffer: Buffer, contentType: string | undefined, url: string): void {
