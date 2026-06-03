@@ -164,7 +164,7 @@ describe("DIT CloudFront Function", () => {
   describe("Accept header normalization", () => {
     test("should select highest priority format from Accept header", async () => {
       const testCases = [
-        { input: "image/avif,image/webp,image/png", expected: "image/webp" },
+        { input: "image/avif,image/webp,image/png", expected: "image/avif" },
         { input: "image/png,image/jpeg", expected: "image/jpeg" },
         { input: "image/avif,image/heif", expected: "image/avif" },
         { input: "image/gif", expected: "image/gif" },

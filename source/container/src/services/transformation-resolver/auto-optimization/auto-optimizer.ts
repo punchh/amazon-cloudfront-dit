@@ -5,7 +5,7 @@ import { Request } from 'express';
 import { Transformation, TransformationPolicy } from '../../../types/transformation';
 import { ImageProcessingRequest } from '../../../types/image-processing-request';
 
-const FORMAT_PRIORITY = ['webp', 'avif', 'jpeg', 'png', 'heif', 'tiff', 'raw', 'gif'];
+const FORMAT_PRIORITY = ['avif', 'webp', 'jpeg', 'png', 'heif', 'tiff', 'raw', 'gif'];
 // TODO, DISCUSS WITH TEAM FOR OPTIMAL FORMAT PRIORITIY LIST
 const ANIMATION_CAPABLE_FORMATS = new Set(['webp', 'avif', 'gif']);
 const FORMAT_MAPPING: Record<string, string> = {

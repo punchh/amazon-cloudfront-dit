@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-const FORMAT_PRIORITY = ['webp', 'avif', 'jpeg', 'png', 'heif', 'tiff', 'raw', 'gif'];
+const FORMAT_PRIORITY = ['avif', 'webp', 'jpeg', 'png', 'heif', 'tiff', 'raw', 'gif'];
 
 const FORMAT_MAPPING = {
   'image/webp': 'webp',

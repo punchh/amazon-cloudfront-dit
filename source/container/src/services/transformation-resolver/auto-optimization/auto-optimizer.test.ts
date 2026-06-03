@@ -46,7 +46,7 @@ describe('applyAutoOptimizations', () => {
       });
     });
 
-    it('should prioritize formats by priority order (webp, avif, jpeg, png)', () => {
+    it('should prioritize formats by priority order (avif, webp, jpeg, png)', () => {
       mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
       mockRequest.headers = { 'dit-accept': 'image/jpeg,image/avif,image/avif,*/*' };
       
@@ -54,6 +54,17 @@ describe('applyAutoOptimizations', () => {
       
       expect(result).toHaveLength(1);
       expect(result[0].value).toBe('avif');
+    });
+
+    it('should prefer avif over webp when both are accepted', () => {
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/avif,image/webp' };
+      const imageRequest = { sourceImageContentType: 'image/jpeg' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ type: 'format', value: 'avif', source: 'auto' });
     });
 
     it('should apply static format when policy format is not auto', () => {
