@@ -8,6 +8,7 @@ import { ImageProcessingError } from './types';
 import { ErrorMapper } from './utils/error-mapping';
 import { TransformationMapper } from './transformation-engine/transformation-mapper';
 import { EditApplicator } from './transformation-engine/edit-applicator';
+import { BmpUtils } from './utils/bmp-utils';
 
 export class ImageProcessorService {
   private static instance: ImageProcessorService;
@@ -31,12 +32,28 @@ export class ImageProcessorService {
 
     try {
       const fetchStart = Date.now();
-      const { buffer: imageBuffer, metadata: originMetadata } = await this.originFetcher.fetchImage(
+      let { buffer: imageBuffer, metadata: originMetadata } = await this.originFetcher.fetchImage(
         imageRequest.origin.url,
         imageRequest.origin.headers,
         imageRequest.requestId
       );
       imageRequest.timings.imageProcessing.originFetchMs = Date.now() - fetchStart;
+
+      // Sharp/libvips has no BMP codec. Transcode BMP sources to PNG up front so
+      // every downstream step (metadata, resize, format conversion, passthrough)
+      // operates on a format Sharp can actually read and write.
+      if (BmpUtils.isBmp(imageRequest.sourceImageContentType)) {
+        const bmpBytes = imageBuffer.length;
+        imageBuffer = await BmpUtils.transcodeToPng(imageBuffer);
+        imageRequest.sourceImageContentType = 'image/png';
+        console.log(JSON.stringify({
+          requestId: imageRequest.requestId,
+          component: 'ImageProcessor',
+          operation: 'bmp_transcoded',
+          sourceBytes: bmpBytes,
+          pngBytes: imageBuffer.length
+        }));
+      }
 
       if (!imageRequest.transformations?.length) {
         imageRequest.response.contentType = imageRequest.sourceImageContentType;

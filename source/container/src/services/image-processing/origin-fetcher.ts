@@ -155,6 +155,9 @@ export class OriginFetcher {
       'image/tiff',
       'image/avif',
       'image/heif',
+      'image/bmp',
+      'image/x-ms-bmp',
+      'image/x-bmp',
     ];
     return validTypes.some(type => contentType.toLowerCase().includes(type));
   }
@@ -173,7 +176,8 @@ export class OriginFetcher {
       '47494638': 'gif',
       '52494646': 'webp',
       '49492A00': 'tiff',
-      '4D4D002A': 'tiff'
+      '4D4D002A': 'tiff',
+      '424D': 'bmp'
     };
 
     const contentTypeToFormat = {
@@ -182,7 +186,10 @@ export class OriginFetcher {
       'image/jpeg': 'jpeg',
       'image/jpg': 'jpeg',
       'image/tiff': 'tiff',
-      'image/gif': 'gif'
+      'image/gif': 'gif',
+      'image/bmp': 'bmp',
+      'image/x-ms-bmp': 'bmp',
+      'image/x-bmp': 'bmp'
     };
 
     const fileHeader = buffer.subarray(0, 4).toString('hex').toUpperCase();

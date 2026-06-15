@@ -323,4 +323,77 @@ describe('ImageProcessorService', () => {
     });
   });
 
+  describe('BMP handling', () => {
+    // Sharp cannot encode BMP, so hand-assemble a minimal 2x2 24-bit BMP.
+    function buildBmp(): Buffer {
+      const px = (b: number, g: number, r: number) => Buffer.from([b, g, r]);
+      const pad = Buffer.from([0, 0]); // 2px * 3 bytes = 6 -> pad to 8
+      const pixels = Buffer.concat([
+        px(255, 0, 0), px(255, 255, 255), pad, // bottom row
+        px(0, 0, 255), px(0, 255, 0), pad      // top row
+      ]);
+      const fh = Buffer.alloc(14);
+      fh.write('BM', 0);
+      fh.writeUInt32LE(54 + pixels.length, 2);
+      fh.writeUInt32LE(54, 10);
+      const dib = Buffer.alloc(40);
+      dib.writeUInt32LE(40, 0);
+      dib.writeInt32LE(2, 4);
+      dib.writeInt32LE(2, 8);
+      dib.writeUInt16LE(1, 12);
+      dib.writeUInt16LE(24, 14);
+      dib.writeUInt32LE(pixels.length, 20);
+      return Buffer.concat([fh, dib, pixels]);
+    }
+
+    it('transcodes a BMP source and applies resize instead of returning a 500', async () => {
+      const bmpBuffer = buildBmp();
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: bmpBuffer,
+        metadata: { size: bmpBuffer.length, format: 'bmp' }
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: 'test-bmp-resize',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/image.bmp' },
+        sourceImageContentType: 'image/bmp',
+        transformations: [{ type: 'resize', value: { width: 50 }, source: 'url' }],
+        response: { headers: {} }
+      };
+
+      const result = await service.process(request);
+
+      // Output is a Sharp-produced raster (PNG by default), never the raw BMP, never a 500.
+      expect(result).toBeInstanceOf(Buffer);
+      expect(result).not.toBe(bmpBuffer);
+      const meta = await sharp(result).metadata();
+      expect(meta.format).toBe('png');
+    });
+
+    it('transcodes a BMP to PNG even when there are no transformations', async () => {
+      const bmpBuffer = buildBmp();
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: bmpBuffer,
+        metadata: { size: bmpBuffer.length, format: 'bmp' }
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: 'test-bmp-passthrough',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/image.bmp' },
+        sourceImageContentType: 'image/bmp',
+        transformations: [],
+        response: { headers: {} }
+      };
+
+      const result = await service.process(request);
+
+      // Never serve image/bmp downstream — Sharp can't, and browsers shouldn't have to.
+      expect(request.response.contentType).toBe('image/png');
+      const meta = await sharp(result).metadata();
+      expect(meta.format).toBe('png');
+    });
+  });
+
 });
