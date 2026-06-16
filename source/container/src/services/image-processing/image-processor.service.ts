@@ -8,6 +8,7 @@ import { ImageProcessingError } from './types';
 import { ErrorMapper } from './utils/error-mapping';
 import { TransformationMapper } from './transformation-engine/transformation-mapper';
 import { EditApplicator } from './transformation-engine/edit-applicator';
+import { isSvgBuffer, isSvgContentType, normalizeSvgContentType, SVG_CONTENT_TYPE } from './utils/svg-utils';
 
 export class ImageProcessorService {
   private static instance: ImageProcessorService;
@@ -43,7 +44,27 @@ export class ImageProcessorService {
         imageRequest.timings.imageProcessing.transformationApplicationMs = 0;
         return imageBuffer;
       }
-      
+
+      // SVG is vector markup, not a raster. Sharp has no SVG decoder and any
+      // format/quality transform (e.g. Gmail's dit-accept → jpeg) would fail
+      // with 500 — Gmail shows that as a broken/not-found image. Serve source
+      // bytes verbatim, matching Cloudinary's SVG passthrough in email clients.
+      if (isSvgContentType(imageRequest.sourceImageContentType) || isSvgBuffer(imageBuffer)) {
+        imageRequest.response.contentType =
+          normalizeSvgContentType(imageRequest.sourceImageContentType) ?? SVG_CONTENT_TYPE;
+        imageRequest.timings.imageProcessing.transformationApplicationMs = 0;
+        console.log(
+          JSON.stringify({
+            requestId: imageRequest.requestId,
+            component: "ImageProcessor",
+            operation: "svg_passthrough",
+            contentType: imageRequest.response.contentType,
+            sizeBytes: imageBuffer.length,
+          })
+        );
+        return imageBuffer;
+      }
+
       // Extract source dimensions to validate auto-resize transformations
       const metadata = await sharp(imageBuffer).metadata();
       this.preventAutoUpscaling(imageRequest, metadata.width);

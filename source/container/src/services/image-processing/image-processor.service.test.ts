@@ -323,4 +323,33 @@ describe('ImageProcessorService', () => {
     });
   });
 
+  describe('SVG passthrough', () => {
+    const TEST_SVG_BUFFER = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><circle r="10"/></svg>');
+
+    it('should passthrough SVG bytes when auto-format requests jpeg (Gmail path)', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_SVG_BUFFER,
+        metadata: { size: TEST_SVG_BUFFER.length, format: 'svg+xml' }
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: 'test-svg-passthrough',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/logo.svg' },
+        sourceImageContentType: 'image/svg+xml',
+        transformations: [
+          { type: 'format', value: 'jpeg', source: 'auto' },
+          { type: 'quality', value: 80, source: 'auto' }
+        ],
+        response: { headers: {} }
+      };
+
+      const result = await service.process(request);
+
+      expect(result).toBe(TEST_SVG_BUFFER);
+      expect(request.response.contentType).toBe('image/svg+xml');
+      expect(request.timings.imageProcessing.transformationApplicationMs).toBe(0);
+    });
+  });
+
 });
