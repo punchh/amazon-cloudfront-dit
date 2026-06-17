@@ -2,6 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import sharp from 'sharp';
+
+const mockBmpDecode = jest.fn();
+jest.mock('bmp-js', () => ({
+  decode: (...args: unknown[]) => mockBmpDecode(...args),
+}));
+
 import { BmpUtils } from './bmp-utils';
 import { ImageProcessingError } from '../types';
 
@@ -43,6 +49,11 @@ function buildBmp(width: number, height: number, pixels: number[][], bpp: 24 | 3
 }
 
 describe('BmpUtils', () => {
+  beforeEach(() => {
+    mockBmpDecode.mockReset();
+    mockBmpDecode.mockImplementation((buffer: Buffer) => jest.requireActual('bmp-js').decode(buffer));
+  });
+
   describe('isBmp', () => {
     it.each([
       'image/bmp',
@@ -108,6 +119,20 @@ describe('BmpUtils', () => {
       const garbage = Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
       await expect(BmpUtils.transcodeToPng(garbage)).rejects.toBeInstanceOf(ImageProcessingError);
       await expect(BmpUtils.transcodeToPng(garbage)).rejects.toMatchObject({ statusCode: 415 });
+    });
+
+    it('throws 415 when decoded dimensions exceed the pixel buffer', async () => {
+      mockBmpDecode.mockReturnValue({
+        width: 10,
+        height: 10,
+        data: Buffer.alloc(16),
+        bitPP: 24,
+      });
+
+      await expect(BmpUtils.transcodeToPng(Buffer.from('BM-fake'))).rejects.toMatchObject({
+        statusCode: 415,
+        errorType: 'InvalidImage',
+      });
     });
   });
 });

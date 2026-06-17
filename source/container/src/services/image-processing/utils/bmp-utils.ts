@@ -46,6 +46,19 @@ export class BmpUtils {
     const hasAlpha = decoded.bitPP === 32;
     const channels = hasAlpha ? 4 : 3;
     const pixelCount = width * height;
+    // bmp-js exposes decoded pixels as ABGR (4 bytes per pixel). If dimensions
+    // disagree with the buffer length, out-of-range reads coerce to 0 and we'd
+    // silently emit a corrupt PNG — fail closed with 415 instead.
+    const minAbgrBytes = pixelCount * 4;
+    if (data.length < minAbgrBytes) {
+      throw new ImageProcessingError(
+        415,
+        'InvalidImage',
+        'Invalid BMP image',
+        `BMP pixel buffer too short: expected at least ${minAbgrBytes} bytes for ${width}x${height}, got ${data.length}.`
+      );
+    }
+
     const raw = Buffer.allocUnsafe(pixelCount * channels);
 
     for (let i = 0; i < pixelCount; i++) {
