@@ -56,8 +56,8 @@ export class ImageProcessorService {
         console.log(
           JSON.stringify({
             requestId: imageRequest.requestId,
-            component: "ImageProcessor",
-            operation: "svg_passthrough",
+            component: 'ImageProcessor',
+            operation: 'svg_passthrough',
             contentType: imageRequest.response.contentType,
             sizeBytes: imageBuffer.length,
           })
