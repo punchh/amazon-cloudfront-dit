@@ -41,6 +41,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@airbrake/node": "^2.1.9",
     "@aws-lambda-powertools/logger": "^2.27.0",
     "@aws-sdk/client-cloudfront": "^3.993.0",
     "@aws-sdk/client-cloudwatch": "^3.993.0",
@@ -51,6 +52,7 @@
     "@middy/http-router": "^5.0.0",
     "@smithy/core": "^3.8.0",
     "metrics-utils": "file:../metrics-utils",
+    "newrelic": "^14.1.1",
     "sharp": "^0.34.5"
   },
   "overrides": {

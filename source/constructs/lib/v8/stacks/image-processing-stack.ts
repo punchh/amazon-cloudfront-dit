@@ -25,6 +25,7 @@ import { addCfnGuardSuppressRules } from "../../../utils/utils";
 import { LOG_RETENTION_DAYS, Utility } from "../constructs/common";
 import { AlbEcsConstruct, ContainerConstruct, EcsConfig, NetworkConstruct } from "../constructs/processor";
 import { SolutionsMetrics, ExecutionDay } from "metrics-utils";
+import { ObservabilityConfig } from "../../types";
 
 interface ImageProcessingStackProps extends NestedStackProps {
   configTable: TableV2;
@@ -33,6 +34,7 @@ interface ImageProcessingStackProps extends NestedStackProps {
   deploymentSize: string;
   originOverrideHeader?: string
   corsOrigin?: string;
+  observability?: ObservabilityConfig;
 }
 
 /**
@@ -92,6 +94,7 @@ export class ImageProcessingStack extends NestedStack {
       configTableArn: props.configTable.tableArn,
       originOverrideHeader: props.originOverrideHeader,
       logGroup: containerLogGroup,
+      observability: props.observability,
     });
 
     const deploymentMode = this.node.tryGetContext("deploymentMode") || "prod";
@@ -285,6 +288,7 @@ export class ImageProcessingStack extends NestedStack {
       table: props.configTable,
       ecsService: albEcsConstruct.service,
       cluster: albEcsConstruct.cluster,
+      observability: props.observability,
     });
 
     if (props.uuid && props.configTableArn) {

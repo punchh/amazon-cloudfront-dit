@@ -22,6 +22,7 @@ import {
   HEALTH_CHECK_UNHEALTHY_THRESHOLD_COUNT,
   SCALE_IN_COOLDOWN_MINUTES,
 } from "../common";
+import { ObservabilityConfig } from "../../../types";
 
 /**
  * Configuration for ECS Fargate deployment
@@ -52,6 +53,7 @@ export interface AlbEcsConstructProps {
   logGroup: logs.LogGroup;
   configTableArn?: string;
   originOverrideHeader?: string;
+  observability?: ObservabilityConfig;
 }
 
 /**
@@ -96,7 +98,8 @@ export class AlbEcsConstruct extends Construct {
       this.taskDefinition,
       props.imageUri,
       props.configTableArn,
-      props.originOverrideHeader
+      props.originOverrideHeader,
+      props.observability
     );
 
     // ALB configuration based on deployment mode
@@ -162,11 +165,17 @@ export class AlbEcsConstruct extends Construct {
     taskDefinition: ecs.TaskDefinition,
     imageUri: string,
     configTableArn?: string,
-    originOverrideHeader?: string
+    originOverrideHeader?: string,
+    observability?: ObservabilityConfig
   ): void {
     const environment: { [key: string]: string } = {
       SOLUTION_ID: process.env.SOLUTION_ID ?? taskDefinition.node.tryGetContext("solutionId"),
       SOLUTION_VERSION: process.env.VERSION ?? taskDefinition.node.tryGetContext("solutionVersion"),
+      NEW_RELIC_APP_NAME: "dit-image-processor",
+      NEW_RELIC_NO_CONFIG_FILE: "true",
+      NEW_RELIC_LICENSE_KEY: observability?.newRelicLicenseKey ?? "",
+      AIRBRAKE_PROJECT_ID: observability?.airbrakeProjectId ?? "",
+      AIRBRAKE_PROJECT_KEY: observability?.airbrakeProjectKey ?? "",
     };
 
     if (configTableArn) {
