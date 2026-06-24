@@ -25,7 +25,7 @@ const errorHandler = (): middy.MiddlewareObj<APIGatewayProxyEvent, APIGatewayPro
   onError: async (request) => {
     const error = request.error;
 
-    airbrake?.notify(error);
+    await airbrake?.notify(error);
 
     if (error instanceof ManagementApiError) {
       logger.error("Management API error", { error });

@@ -86,7 +86,7 @@ async function imageHandler(
     await s3Client.send(new WriteGetObjectResponseCommand(params));
   } catch (error) {
     console.error("Error occurred while writing the response to S3 Object Lambda.", error);
-    airbrake?.notify(error);
+    await airbrake?.notify(error);
     const errorParams = buildErrorResponseParams(
       getObjectEvent,
       new ImageHandlerError(
@@ -159,7 +159,7 @@ async function handleRequest(event: ImageHandlerEvent): Promise<ImageHandlerExec
     };
   } catch (error) {
     console.error(error);
-    airbrake?.notify(error);
+    await airbrake?.notify(error);
 
     // Default fallback image
     const { ENABLE_DEFAULT_FALLBACK_IMAGE, DEFAULT_FALLBACK_IMAGE_BUCKET, DEFAULT_FALLBACK_IMAGE_KEY } = process.env;
@@ -172,7 +172,7 @@ async function handleRequest(event: ImageHandlerEvent): Promise<ImageHandlerExec
         return await handleDefaultFallbackImage(imageRequest, event, isAlb, error);
       } catch (error) {
         console.error("Error occurred while getting the default fallback image.", error);
-        airbrake?.notify(error);
+        await airbrake?.notify(error);
       }
     }
 

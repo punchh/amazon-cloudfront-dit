@@ -29,7 +29,7 @@ async function utilityHandler(event: SupportedEvent): Promise<void> {
       try {
         await utility.execute(event);
       } catch (error) {
-        airbrake?.notify(error);
+        await airbrake?.notify(error);
         throw error;
       }
       return;
