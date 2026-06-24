@@ -40,9 +40,9 @@ export class DITNodejsFunction extends NodejsFunction {
       bundling: {
         minify: true,
         sourceMap: true,
-        externalModules: ["newrelic", "@airbrake/node"],
-        nodeModules: ["newrelic", "@airbrake/node"],
         ...props?.bundling,
+        externalModules: [...(props?.bundling?.externalModules ?? []), "newrelic", "@airbrake/node"],
+        nodeModules: [...(props?.bundling?.nodeModules ?? []), "newrelic", "@airbrake/node"],
       },
       environment: {
         SOLUTION_ID: SOLUTION_ID ?? scope.node.tryGetContext("solutionId"),
