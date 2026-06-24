@@ -5,9 +5,11 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@airbrake/node": "^2.1.9",
     "@aws-sdk/client-ecs": "^3.993.0",
     "@aws-sdk/client-cloudwatch": "^3.993.0",
-    "@types/aws-lambda": "^8.10.0"
+    "@types/aws-lambda": "^8.10.0",
+    "newrelic": "^14.1.1"
   },
   "devDependencies": {
     "@types/jest": "^29.0.0",

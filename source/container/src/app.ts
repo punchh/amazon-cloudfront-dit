@@ -6,12 +6,23 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
+import { Notifier } from '@airbrake/node';
 import routes from './routes';
 import { initializeContainer } from './services/initialization';
 import { queryTypesMiddleware } from './middleware/query-types';
 
 // Create Express application
 const app = express();
+
+// Initialize Airbrake notifier once for the lifetime of the container
+const { AIRBRAKE_PROJECT_ID, AIRBRAKE_PROJECT_KEY } = process.env;
+const airbrake = (AIRBRAKE_PROJECT_ID && AIRBRAKE_PROJECT_KEY)
+  ? new Notifier({
+      projectId: parseInt(AIRBRAKE_PROJECT_ID, 10),
+      projectKey: AIRBRAKE_PROJECT_KEY,
+      environment: process.env.NODE_ENV ?? 'production',
+    })
+  : null;
 
 // Security middleware
 app.use(helmet());
@@ -43,7 +54,10 @@ app.use('/', routes);
 // Global error handler
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled error:', err);
-  
+
+  // Report to Airbrake when configured
+  airbrake?.notify(err);
+
   res.status(500).json({
     error: 'Internal Server Error',
     message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
