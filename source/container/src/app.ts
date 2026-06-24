@@ -6,23 +6,16 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
-import { Notifier } from '@airbrake/node';
 import routes from './routes';
 import { initializeContainer } from './services/initialization';
 import { queryTypesMiddleware } from './middleware/query-types';
+import { createAirbrakeNotifier } from './observability';
 
 // Create Express application
 const app = express();
 
 // Initialize Airbrake notifier once for the lifetime of the container
-const { AIRBRAKE_PROJECT_ID, AIRBRAKE_PROJECT_KEY } = process.env;
-const airbrake = (AIRBRAKE_PROJECT_ID && AIRBRAKE_PROJECT_KEY)
-  ? new Notifier({
-      projectId: parseInt(AIRBRAKE_PROJECT_ID, 10),
-      projectKey: AIRBRAKE_PROJECT_KEY,
-      environment: process.env.NODE_ENV ?? 'production',
-    })
-  : null;
+const airbrake = createAirbrakeNotifier();
 
 // Security middleware
 app.use(helmet());
