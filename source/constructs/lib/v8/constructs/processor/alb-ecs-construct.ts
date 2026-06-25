@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Duration, Fn, Token } from "aws-cdk-lib";
+import { Duration, Fn, Stack, Token } from "aws-cdk-lib";
 import * as appscaling from "aws-cdk-lib/aws-applicationautoscaling";
 import { ISecurityGroup, IVpc } from "aws-cdk-lib/aws-ec2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
@@ -171,7 +171,7 @@ export class AlbEcsConstruct extends Construct {
     const environment: { [key: string]: string } = {
       SOLUTION_ID: process.env.SOLUTION_ID ?? taskDefinition.node.tryGetContext("solutionId"),
       SOLUTION_VERSION: process.env.VERSION ?? taskDefinition.node.tryGetContext("solutionVersion"),
-      NEW_RELIC_APP_NAME: "dit-image-processor",
+      NEW_RELIC_APP_NAME: process.env.NEW_RELIC_APP_NAME ?? Stack.of(this).stackName,
       NEW_RELIC_NO_CONFIG_FILE: "true",
       NEW_RELIC_LICENSE_KEY: observability?.newRelicLicenseKey ?? "",
       AIRBRAKE_PROJECT_ID: observability?.airbrakeProjectId ?? "",

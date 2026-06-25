@@ -520,7 +520,9 @@ exports[`ImageProcessingStack Snapshot Test 1`] = `
               },
               {
                 "Name": "NEW_RELIC_APP_NAME",
-                "Value": "dit-image-processor",
+                "Value": {
+                  "Ref": "AWS::StackName",
+                },
               },
               {
                 "Name": "NEW_RELIC_NO_CONFIG_FILE",
@@ -1760,7 +1762,9 @@ async function handler(event) {
                 "Name",
               ],
             },
-            "NEW_RELIC_APP_NAME": "dit-utility",
+            "NEW_RELIC_APP_NAME": {
+              "Ref": "AWS::StackName",
+            },
             "NEW_RELIC_LICENSE_KEY": "",
             "NEW_RELIC_NO_CONFIG_FILE": "true",
             "SOLUTION_ID": "SO0023",

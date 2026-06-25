@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CfnOutput } from "aws-cdk-lib";
+import { CfnOutput, Stack } from "aws-cdk-lib";
 import {
   AccessLogField,
   AccessLogFormat,
@@ -47,7 +47,7 @@ export class DalConstruct extends Construct {
         POWERTOOLS_LOGGER_LOG_LEVEL: "INFO",
         POWERTOOLS_LOGGER_LOG_EVENT: "false",
         NEW_RELIC_LICENSE_KEY: props.observability?.newRelicLicenseKey ?? "",
-        NEW_RELIC_APP_NAME: "dit-management-api",
+        NEW_RELIC_APP_NAME: process.env.NEW_RELIC_APP_NAME ?? Stack.of(this).stackName,
         NEW_RELIC_NO_CONFIG_FILE: "true",
         AIRBRAKE_PROJECT_ID: props.observability?.airbrakeProjectId ?? "",
         AIRBRAKE_PROJECT_KEY: props.observability?.airbrakeProjectKey ?? "",

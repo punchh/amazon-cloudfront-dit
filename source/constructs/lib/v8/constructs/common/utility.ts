@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Duration } from "aws-cdk-lib";
+import { Duration, Stack } from "aws-cdk-lib";
 import { ITable } from "aws-cdk-lib/aws-dynamodb";
 import { Cluster, FargateService } from "aws-cdk-lib/aws-ecs";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
@@ -33,7 +33,7 @@ export class Utility extends Construct {
         SOLUTION_ID: SOLUTION_ID ?? scope.node.tryGetContext("solutionId"),
         SOLUTION_VERSION: VERSION ?? scope.node.tryGetContext("solutionVersion"),
         NEW_RELIC_LICENSE_KEY: props.observability?.newRelicLicenseKey ?? "",
-        NEW_RELIC_APP_NAME: "dit-utility",
+        NEW_RELIC_APP_NAME: process.env.NEW_RELIC_APP_NAME ?? Stack.of(this).stackName,
         NEW_RELIC_NO_CONFIG_FILE: "true",
         AIRBRAKE_PROJECT_ID: props.observability?.airbrakeProjectId ?? "",
         AIRBRAKE_PROJECT_KEY: props.observability?.airbrakeProjectKey ?? "",
