@@ -59,6 +59,27 @@ export class ManagementStack extends Stack {
       allowedPattern: "^$|^\\*$|^https://[a-zA-Z0-9.-]+$"
     });
 
+    const newRelicLicenseKeyParameter = new CfnParameter(this, "NewRelicLicenseKeyParameter", {
+      type: "String",
+      description:
+        "(Optional) New Relic license key for APM and distributed tracing. Leave empty to disable New Relic.",
+      default: "",
+      noEcho: true,
+    });
+
+    const airbrakeProjectIdParameter = new CfnParameter(this, "AirbrakeProjectIdParameter", {
+      type: "String",
+      description: "(Optional) Airbrake project ID for error tracking. Leave empty to disable Airbrake.",
+      default: "",
+    });
+
+    const airbrakeProjectKeyParameter = new CfnParameter(this, "AirbrakeProjectKeyParameter", {
+      type: "String",
+      description: "(Optional) Airbrake project key for error tracking. Leave empty to disable Airbrake.",
+      default: "",
+      noEcho: true,
+    });
+
     const webConstruct: WebDistributionConstruct = new WebDistributionConstruct(this, "WebDistribution");
 
     const authConstruct = new AuthConstruct(this, "Auth", {
@@ -70,6 +91,11 @@ export class ManagementStack extends Stack {
     const dalConstruct = new DalConstruct(this, "DataAccessLayer", {
       userPool: authConstruct.userPool,
       corsOrigin: `https://${webConstruct.distribution.domainName}`,
+      observability: {
+        newRelicLicenseKey: newRelicLicenseKeyParameter.valueAsString,
+        airbrakeProjectId: airbrakeProjectIdParameter.valueAsString,
+        airbrakeProjectKey: airbrakeProjectKeyParameter.valueAsString,
+      },
     });
 
     new CSPUpdaterConstruct(this, "CSPUpdater", {
@@ -147,7 +173,12 @@ export class ManagementStack extends Stack {
       configTableArn: dalConstruct.table.tableArn,
       deploymentSize: deploymentSize.valueAsString,
       originOverrideHeader: originOverrideHeader.valueAsString,
-      corsOrigin: corsOriginParameter.valueAsString
+      corsOrigin: corsOriginParameter.valueAsString,
+      observability: {
+        newRelicLicenseKey: newRelicLicenseKeyParameter.valueAsString,
+        airbrakeProjectId: airbrakeProjectIdParameter.valueAsString,
+        airbrakeProjectKey: airbrakeProjectKeyParameter.valueAsString,
+      },
     });
 
     new CfnOutput(this, "WebPortalUrl", {

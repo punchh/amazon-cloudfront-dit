@@ -9,9 +9,13 @@ import morgan from 'morgan';
 import routes from './routes';
 import { initializeContainer } from './services/initialization';
 import { queryTypesMiddleware } from './middleware/query-types';
+import { createAirbrakeNotifier } from './observability';
 
 // Create Express application
 const app = express();
+
+// Initialize Airbrake notifier once for the lifetime of the container
+const airbrake = createAirbrakeNotifier();
 
 // Security middleware
 app.use(helmet());
@@ -43,7 +47,10 @@ app.use('/', routes);
 // Global error handler
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled error:', err);
-  
+
+  // Report to Airbrake when configured
+  airbrake?.notify(err);
+
   res.status(500).json({
     error: 'Internal Server Error',
     message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',

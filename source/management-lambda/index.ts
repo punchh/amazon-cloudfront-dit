@@ -1,6 +1,8 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+// New Relic must be imported before other modules for full instrumentation
+import newrelic from "newrelic";
 import middy from "@middy/core";
 import cors from "@middy/http-cors";
 import httpHeaderNormalizer from "@middy/http-header-normalizer";
@@ -10,15 +12,20 @@ import { ThrottlingException } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { InternalServerError, MalformedJsonError, ManagementApiError, TooManyRequestsError, logger } from "./common";
 import { injectLambdaContext } from "@aws-lambda-powertools/logger/middleware";
+import { createAirbrakeNotifier } from "./observability";
 import { routes } from "./routes";
 
 // reuse the first connection established with AWS services across lambda invocations
 process.env.AWS_NODEJS_CONNECTION_REUSE_ENABLED = "1";
 
+const airbrake = createAirbrakeNotifier();
+
 // error handler middleware
 const errorHandler = (): middy.MiddlewareObj<APIGatewayProxyEvent, APIGatewayProxyResult> => ({
   onError: async (request) => {
     const error = request.error;
+
+    await airbrake?.notify(error);
 
     if (error instanceof ManagementApiError) {
       logger.error("Management API error", { error });
@@ -83,7 +90,7 @@ const addCacheControlHeader = (): middy.MiddlewareObj<APIGatewayProxyEvent, APIG
   },
 });
 
-export const handler = middy()
+const managementHandler = middy()
   .use(injectLambdaContext(logger, { resetKeys: true })) // custom keys can persist across invocations, so reset
   .use(addRequestId())
   .use(httpHeaderNormalizer())
@@ -99,3 +106,6 @@ export const handler = middy()
   .use(errorHandler())
   .use(addCacheControlHeader())
   .handler(httpRouterHandler(routes));
+
+// Wrap handler with New Relic for Lambda instrumentation
+export const handler = newrelic.setLambdaHandler(managementHandler);
