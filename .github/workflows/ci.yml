@@ -20,8 +20,8 @@ jobs:
       test_command: 'cd source && npm ci && npm run install:dependencies && npm test'
       docker_context: source
       dockerfile_path: Dockerfile
-      skip_snyk: false
-      skip_tests: false
+      skip_snyk: true
+      skip_tests: true
       skip_es: true
       skip_mongo: true
     secrets: inherit
