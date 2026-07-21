@@ -1,0 +1,27 @@
+name: CI
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build'
+        default: 'main'
+        type: string
+  push:
+    branches: [main, master, hotfix_*, release_fix*]
+
+jobs:
+  ci:
+    uses: punchh/GHA-central-workflow/.github/workflows/ci.yml@main
+    with:
+      repository: punchh/amazon-cloudfront-dit
+      branch: ${{ inputs.branch || github.ref_name }}
+      technology: node
+      technology_version: '20'
+      test_command: 'cd source && npm ci && npm run install:dependencies && npm test'
+      docker_context: source
+      dockerfile_path: Dockerfile
+      skip_snyk: false
+      skip_tests: false
+      skip_es: true
+      skip_mongo: true
+    secrets: inherit
