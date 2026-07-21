@@ -11,7 +11,7 @@ on:
 
 jobs:
   ci:
-    uses: punchh/GHA-central-workflow/.github/workflows/ci.yml@DEVOPS-20507
+    uses: punchh/GHA-central-workflow/.github/workflows/ci.yml@main
     with:
       repository: punchh/amazon-cloudfront-dit
       branch: ${{ inputs.branch || github.ref_name }}
