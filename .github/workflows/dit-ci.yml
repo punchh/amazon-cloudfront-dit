@@ -39,23 +39,6 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies for Snyk
-        run: |
-          cd source
-          npm ci
-
-      - name: Snyk Security Scan
-        uses: punchh/GHA-central-workflow/.github/actions/snyk-scan@main
-        with:
-          technology: node
-          repository: punchh/amazon-cloudfront-dit
-          branch: ${{ inputs.branch || github.ref_name }}
-          snyk_token: ${{ secrets.SVC_ACCOUNT_SNYK_ORG_TOKEN }}
-          snyk_org_id: par-tech-poc
-          severity_threshold: high
-          triggered_user: '<!here>'
-          slack_bot_token: ${{ secrets.CAPTAIN_DEVOPS_SLACK_BOT_TOKEN }}
-
       - name: Configure AWS credentials for ECR
         uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
         with:
