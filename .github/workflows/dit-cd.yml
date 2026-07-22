@@ -41,7 +41,7 @@ permissions:
 
 jobs:
   resolve-tag:
-    runs-on: ubuntu-latest
+    runs-on: [nonprod, punchh, deploy, cd]
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
       image: ${{ steps.resolve.outputs.image }}
@@ -130,7 +130,7 @@ jobs:
   approval:
     needs: resolve-tag
     if: ${{ inputs.environment == 'shared-services-prod' }}
-    runs-on: ubuntu-latest
+    runs-on: [nonprod, punchh, deploy, cd]
     environment: production-approval
     steps:
       - name: Approval Gate
@@ -142,7 +142,7 @@ jobs:
   deploy:
     needs: [resolve-tag, approval]
     if: ${{ always() && needs.resolve-tag.result == 'success' && (needs.approval.result == 'success' || needs.approval.result == 'skipped') }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.environment == 'shared-services-prod' && fromJSON('["prod", "punchh", "deploy", "cd"]') || fromJSON('["nonprod", "punchh", "deploy", "cd"]') }}
     timeout-minutes: 15
     steps:
       - name: Configure AWS credentials for EKS
@@ -152,12 +152,6 @@ jobs:
           aws-region: us-east-1
           audience: sts.amazonaws.com
           mask-aws-account-id: 'false'
-
-      - name: Install kubectl
-        run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/
 
       - name: Setup Kubernetes
         run: |
