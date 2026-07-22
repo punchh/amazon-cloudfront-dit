@@ -58,12 +58,25 @@ jobs:
           BRANCH="${{ inputs.branch || github.ref_name }}"
 
           if [[ "$BRANCH" == "master" || "$BRANCH" == "main" || "$BRANCH" =~ ^hotfix_ || "$BRANCH" =~ ^release_fix ]]; then
+            # Try git tags first
             CURRENT_TAG=$(git tag -l --sort=v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -n1 || true)
-            echo "Current tag: ${CURRENT_TAG:-none}"
+            echo "Git tag found: ${CURRENT_TAG:-none}"
+
+            # If no git tag, check ECR for the latest image tag
+            if [ -z "$CURRENT_TAG" ]; then
+              echo "No git tags found, checking ECR..."
+              CURRENT_TAG=$(aws ecr describe-images \
+                --repository-name "${ECR_REPOSITORY}" \
+                --region "${AWS_REGION}" \
+                --query "imageDetails[*].imageTags[]" \
+                --output json 2>/dev/null | jq -r '.[]' | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -n1 || true)
+              echo "ECR tag found: ${CURRENT_TAG:-none}"
+            fi
 
             if [ -z "$CURRENT_TAG" ]; then
               NEW_TAG="v8.0.0.1"
             else
+              # Increment last segment (v8.0.5.3 → v8.0.5.4)
               PREFIX=$(echo "$CURRENT_TAG" | sed 's/\.[0-9]*$//')
               LAST=$(echo "$CURRENT_TAG" | grep -oE '[0-9]+$')
               NEW_TAG="${PREFIX}.$((LAST + 1))"
