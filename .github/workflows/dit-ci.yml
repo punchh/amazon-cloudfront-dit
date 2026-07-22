@@ -7,8 +7,6 @@ on:
         description: 'Branch to build'
         default: 'main'
         type: string
-  push:
-    branches: [main, master, hotfix_*, release_fix*]
 
 env:
   AWS_REGION: us-east-1
