@@ -89,6 +89,16 @@ describe('applyAutoOptimizations', () => {
       expect(result).toHaveLength(0);
     });
 
+    it('should skip format conversion when source is SVG (Gmail jpeg Accept path)', () => {
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/jpeg' };
+      const imageRequest = { sourceImageContentType: 'image/svg+xml' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(0);
+    });
+
     it('should allow format conversion when source is GIF and selected format is webp', () => {
       mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
       mockRequest.headers = { 'dit-accept': 'image/webp' };

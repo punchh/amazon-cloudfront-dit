@@ -7,6 +7,7 @@ import { ImageProcessingError } from './types';
 import { S3UrlHelper } from '../../utils/s3-url-helper';
 import { UrlValidator } from '../../utils/url-validator';
 import { S3ErrorHandler } from '../../utils/s3-error-handler';
+import { isSvgBuffer, SVG_CONTENT_TYPE } from './utils/svg-utils';
 
 export class OriginFetcher {
   private s3Client: S3Client;
@@ -155,6 +156,7 @@ export class OriginFetcher {
       'image/tiff',
       'image/avif',
       'image/heif',
+      SVG_CONTENT_TYPE,
     ];
     return validTypes.some(type => contentType.toLowerCase().includes(type));
   }
@@ -182,7 +184,8 @@ export class OriginFetcher {
       'image/jpeg': 'jpeg',
       'image/jpg': 'jpeg',
       'image/tiff': 'tiff',
-      'image/gif': 'gif'
+      'image/gif': 'gif',
+      [SVG_CONTENT_TYPE]: 'svg',
     };
 
     const fileHeader = buffer.subarray(0, 4).toString('hex').toUpperCase();
@@ -196,7 +199,15 @@ export class OriginFetcher {
     }
 
     if (contentType) {
-      const expectedFormat = contentTypeToFormat[contentType.toLowerCase()];
+      const bareContentType = contentType.split(';')[0].trim().toLowerCase();
+      const expectedFormat = contentTypeToFormat[bareContentType];
+      // SVG is text/XML — validate markup prefix instead of binary magic numbers.
+      if (expectedFormat === 'svg') {
+        if (!isSvgBuffer(buffer)) {
+          throw new ImageProcessingError(415, 'InvalidImage', 'Invalid image file', `Image from '${url}': Content-Type indicates svg but file does not begin with valid SVG markup.`);
+        }
+        return;
+      }
       // If no expectedFormat found, skip magic number validation
       if (expectedFormat) {
         if (!detectedFormat) {

@@ -17,6 +17,7 @@ describe('OriginFetcher', () => {
       expect(fetcher['isValidImageContentType']('image/jpeg')).toBe(true);
       expect(fetcher['isValidImageContentType']('image/png')).toBe(true);
       expect(fetcher['isValidImageContentType']('image/webp')).toBe(true);
+      expect(fetcher['isValidImageContentType']('image/svg+xml')).toBe(true);
     });
 
     it('should reject invalid content types', () => {
@@ -99,6 +100,17 @@ describe('OriginFetcher', () => {
     it('should reject malformed magic numbers with content-type', () => {
       const malformedPngBuffer = Buffer.from([0x89, 0x50, 0x4E, 0x46]); // Should be 0x47, not 0x46
       expect(() => fetcher['validateImageMagicNumbers'](malformedPngBuffer, 'image/png', 'https://example.com/test.png'))
+        .toThrow('Invalid image file');
+    });
+
+    it('should validate SVG markup when content-type is image/svg+xml', () => {
+      const svgBuffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+      expect(() => fetcher['validateImageMagicNumbers'](svgBuffer, 'image/svg+xml', 'https://example.com/test.svg')).not.toThrow();
+    });
+
+    it('should reject non-SVG bytes when content-type is image/svg+xml', () => {
+      const jpegBuffer = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]);
+      expect(() => fetcher['validateImageMagicNumbers'](jpegBuffer, 'image/svg+xml', 'https://example.com/test.svg'))
         .toThrow('Invalid image file');
     });
   });
