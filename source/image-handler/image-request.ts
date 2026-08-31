@@ -19,6 +19,7 @@ import {
 } from "./lib";
 import { SecretProvider } from "./secret-provider";
 import { ThumborMapper } from "./thumbor-mapper";
+import { buildCacheControl } from "../solution-utils/helpers";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import utc from "dayjs/plugin/utc";
@@ -195,7 +196,10 @@ export class ImageRequest {
         result.lastModified = new Date(originalImage.LastModified).toUTCString();
       }
 
-      result.cacheControl = originalImage.CacheControl ?? "max-age=31536000,public";
+      // Compose Cache-Control with stale-while-revalidate + stale-if-error (+ optional TTL jitter)
+      // to mitigate the CloudFront "thundering herd" on cache expiry. Preserves the source
+      // object's max-age when present; otherwise uses the configured default.
+      result.cacheControl = buildCacheControl(originalImage.CacheControl);
       result.originalImage = imageBuffer;
 
       return result;

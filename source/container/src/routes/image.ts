@@ -12,6 +12,7 @@ import { OriginNotFoundError } from '../services/request-resolver/errors/origin-
 import { ConnectionError } from '../services/request-resolver/errors/connection.error';
 import { PolicyNotFoundError } from '../services/transformation-resolver/errors/policy-not-found.error';
 import { ImageProcessingError } from '../services/image-processing/types';
+import { buildCacheControl, buildErrorCacheControl } from '../utils/cache-control';
 
 const router = Router();
 
@@ -63,6 +64,10 @@ router.get('*', async (req: Request, res: Response) => {
     if (CORS_ORIGIN) {
       res.set('Access-Control-Allow-Origin', CORS_ORIGIN);
     }
+    // Emit stale-while-revalidate + stale-if-error (+ optional TTL jitter) so CloudFront
+    // serves stale content on expiry and revalidates in the background — mitigating the
+    // "thundering herd" on cache expiry. Preserves any upstream max-age when present.
+    res.set('Cache-Control', buildCacheControl(imageRequest.response.headers?.['Cache-Control']));
     res.type(imageRequest.response.contentType || 'image/jpeg');
     res.send(processedImage);
 
@@ -90,7 +95,13 @@ router.get('*', async (req: Request, res: Response) => {
   } catch (error) {
     const requestId = imageRequest?.requestId || 'unknown';
     const { statusCode, errorType, clientMessage } = handleError(error, requestId, startTime);
-    
+
+    // On 5xx, emit stale-if-error so CloudFront keeps serving previously cached content
+    // during an origin outage instead of forwarding the error to end users.
+    if (statusCode >= 500 && statusCode < 600) {
+      res.set('Cache-Control', buildErrorCacheControl());
+    }
+
     res.status(statusCode).json({
       error: errorType,
       message: clientMessage,
