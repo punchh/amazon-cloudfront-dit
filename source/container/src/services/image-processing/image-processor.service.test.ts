@@ -1,28 +1,40 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ImageProcessorService } from './image-processor.service';
-import { ImageProcessingRequest } from '../../types/image-processing-request';
-import { EditApplicator } from './transformation-engine/edit-applicator';
-import { ErrorMapper } from './utils/error-mapping';
-import { ImageProcessingError } from './types';
-import sharp from 'sharp';
+import { ImageProcessorService } from "./image-processor.service";
+import { ImageProcessingRequest } from "../../types/image-processing-request";
+import { EditApplicator } from "./transformation-engine/edit-applicator";
+import { ErrorMapper } from "./utils/error-mapping";
+import { ImageProcessingError } from "./types";
+import sharp from "sharp";
 
 let TEST_JPEG_BUFFER: Buffer;
 let TEST_GIF_BUFFER: Buffer;
+let TEST_TRANSPARENT_PNG_BUFFER: Buffer;
 
 beforeAll(async () => {
   // Generate valid test images using Sharp
   TEST_JPEG_BUFFER = await sharp({
-    create: { width: 100, height: 100, channels: 3, background: { r: 255, g: 0, b: 0 } }
-  }).jpeg().toBuffer();
-  
+    create: { width: 100, height: 100, channels: 3, background: { r: 255, g: 0, b: 0 } },
+  })
+    .jpeg()
+    .toBuffer();
+
   TEST_GIF_BUFFER = await sharp({
-    create: { width: 100, height: 100, channels: 3, background: { r: 0, g: 0, b: 255 } }
-  }).gif().toBuffer();
+    create: { width: 100, height: 100, channels: 3, background: { r: 0, g: 0, b: 255 } },
+  })
+    .gif()
+    .toBuffer();
+
+  // 4-channel RGBA with a fully-transparent background — Sharp metadata reports hasAlpha=true.
+  TEST_TRANSPARENT_PNG_BUFFER = await sharp({
+    create: { width: 100, height: 100, channels: 4, background: { r: 0, g: 255, b: 0, alpha: 0 } },
+  })
+    .png()
+    .toBuffer();
 });
 
-describe('ImageProcessorService', () => {
+describe("ImageProcessorService", () => {
   let service: ImageProcessorService;
 
   beforeEach(() => {
@@ -30,40 +42,40 @@ describe('ImageProcessorService', () => {
     service = ImageProcessorService.getInstance();
   });
 
-  describe('getInstance', () => {
-    it('should return singleton instance', () => {
+  describe("getInstance", () => {
+    it("should return singleton instance", () => {
       const instance1 = ImageProcessorService.getInstance();
       const instance2 = ImageProcessorService.getInstance();
       expect(instance1).toBe(instance2);
     });
   });
 
-  describe('process', () => {
-    it('should throw error for missing origin URL', async () => {
+  describe("process", () => {
+    it("should throw error for missing origin URL", async () => {
       const request: ImageProcessingRequest = {
-        requestId: 'test-123',
+        requestId: "test-123",
         timestamp: Date.now(),
-        origin: { url: '' },
+        origin: { url: "" },
         transformations: [],
-        response: { headers: {} }
+        response: { headers: {} },
       };
 
       await expect(service.process(request)).rejects.toThrow();
     });
 
-    it('should handle empty transformations array', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+    it("should handle empty transformations array", async () => {
+      const mockBuffer = Buffer.from("fake-image-data");
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
         buffer: mockBuffer,
-        metadata: { size: mockBuffer.length }
+        metadata: { size: mockBuffer.length },
       });
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-123',
+        requestId: "test-123",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
+        origin: { url: "https://example.com/image.jpg" },
         transformations: [],
-        response: { headers: {} }
+        response: { headers: {} },
       };
 
       const result = await service.process(request);
@@ -71,47 +83,47 @@ describe('ImageProcessorService', () => {
     });
   });
 
-  describe('overlay size calculation', () => {
-    it('should calculate percentage-based overlay size', () => {
-      const result = EditApplicator.calcOverlaySizeOption('50p', 1000, 100);
+  describe("overlay size calculation", () => {
+    it("should calculate percentage-based overlay size", () => {
+      const result = EditApplicator.calcOverlaySizeOption("50p", 1000, 100);
       expect(result).toBe(500);
     });
 
-    it('should calculate absolute overlay size', () => {
-      const result = EditApplicator.calcOverlaySizeOption('200', 1000, 100);
+    it("should calculate absolute overlay size", () => {
+      const result = EditApplicator.calcOverlaySizeOption("200", 1000, 100);
       expect(result).toBe(200);
     });
 
-    it('should handle negative values', () => {
-      const result = EditApplicator.calcOverlaySizeOption('-50', 1000, 100);
+    it("should handle negative values", () => {
+      const result = EditApplicator.calcOverlaySizeOption("-50", 1000, 100);
       expect(result).toBe(850); // 1000 + (-50) - 100
     });
 
-    it('should handle numeric input', () => {
+    it("should handle numeric input", () => {
       const result = EditApplicator.calcOverlaySizeOption(150, 1000, 100);
       expect(result).toBe(150);
     });
 
-    it('should handle negative percentage values', () => {
-      const result = EditApplicator.calcOverlaySizeOption('-25p', 1000, 100);
+    it("should handle negative percentage values", () => {
+      const result = EditApplicator.calcOverlaySizeOption("-25p", 1000, 100);
       expect(result).toBe(650); // floor(1000 + (1000 * -25) / 100) - 100 = 750 - 100
     });
   });
 
-  describe('process request initialization', () => {
-    it('should initialize timings object if missing', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+  describe("process request initialization", () => {
+    it("should initialize timings object if missing", async () => {
+      const mockBuffer = Buffer.from("fake-image-data");
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
         buffer: mockBuffer,
-        metadata: { size: mockBuffer.length }
+        metadata: { size: mockBuffer.length },
       });
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-123',
+        requestId: "test-123",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
+        origin: { url: "https://example.com/image.jpg" },
         transformations: [],
-        response: { headers: {} }
+        response: { headers: {} },
       };
 
       await service.process(request);
@@ -119,148 +131,148 @@ describe('ImageProcessorService', () => {
       expect(request.timings.imageProcessing).toBeDefined();
     });
 
-    it('should set sourceImageContentType on response for no-transform case', async () => {
-      const mockBuffer = Buffer.from('fake-image-data');
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+    it("should set sourceImageContentType on response for no-transform case", async () => {
+      const mockBuffer = Buffer.from("fake-image-data");
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
         buffer: mockBuffer,
-        metadata: { size: mockBuffer.length }
+        metadata: { size: mockBuffer.length },
       });
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-123',
+        requestId: "test-123",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
+        origin: { url: "https://example.com/image.jpg" },
         transformations: [],
-        sourceImageContentType: 'image/jpeg',
-        response: { headers: {} }
+        sourceImageContentType: "image/jpeg",
+        response: { headers: {} },
       };
 
       await service.process(request);
-      expect(request.response.contentType).toBe('image/jpeg');
+      expect(request.response.contentType).toBe("image/jpeg");
     });
   });
 
-  describe('full transformation pipeline', () => {
-    it('should process image with transformations and set contentType from output', async () => {
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+  describe("full transformation pipeline", () => {
+    it("should process image with transformations and set contentType from output", async () => {
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
         buffer: TEST_JPEG_BUFFER,
-        metadata: { size: TEST_JPEG_BUFFER.length, format: 'jpeg' }
+        metadata: { size: TEST_JPEG_BUFFER.length, format: "jpeg" },
       });
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-pipeline',
+        requestId: "test-pipeline",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
-        transformations: [{ type: 'resize', value: { width: 1 }, source: 'url' }],
-        response: { headers: {} }
+        origin: { url: "https://example.com/image.jpg" },
+        transformations: [{ type: "resize", value: { width: 1 }, source: "url" }],
+        response: { headers: {} },
       };
 
       const result = await service.process(request);
-      
+
       expect(result).toBeInstanceOf(Buffer);
       expect(request.response.contentType).toMatch(/^image\//);
       expect(request.timings.imageProcessing.transformationApplicationMs).toBeGreaterThanOrEqual(0);
     });
   });
 
-  describe('preventAutoUpscaling', () => {
-    it('should filter out auto-resize transforms that would upscale', async () => {
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+  describe("preventAutoUpscaling", () => {
+    it("should filter out auto-resize transforms that would upscale", async () => {
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
         buffer: TEST_JPEG_BUFFER,
-        metadata: { size: TEST_JPEG_BUFFER.length }
+        metadata: { size: TEST_JPEG_BUFFER.length },
       });
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-upscale',
+        requestId: "test-upscale",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
+        origin: { url: "https://example.com/image.jpg" },
         transformations: [
-          { type: 'resize', value: { width: 5000 }, source: 'auto' }, // Should be filtered (upscale)
-          { type: 'negate', value: true, source: 'url' } // Should remain
+          { type: "resize", value: { width: 5000 }, source: "auto" }, // Should be filtered (upscale)
+          { type: "negate", value: true, source: "url" }, // Should remain
         ],
-        response: { headers: {} }
+        response: { headers: {} },
       };
 
       await service.process(request);
-      
+
       expect(request.transformations).toHaveLength(1);
-      expect(request.transformations[0].type).toBe('negate');
+      expect(request.transformations[0].type).toBe("negate");
     });
 
-    it('should keep auto-resize transforms that do not upscale', async () => {
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+    it("should keep auto-resize transforms that do not upscale", async () => {
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
         buffer: TEST_JPEG_BUFFER,
-        metadata: { size: TEST_JPEG_BUFFER.length }
+        metadata: { size: TEST_JPEG_BUFFER.length },
       });
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-no-upscale',
+        requestId: "test-no-upscale",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
+        origin: { url: "https://example.com/image.jpg" },
         transformations: [
-          { type: 'resize', value: { width: 1 }, source: 'auto' } // 1x1 image, width=1 is not upscaling
+          { type: "resize", value: { width: 1 }, source: "auto" }, // 1x1 image, width=1 is not upscaling
         ],
-        response: { headers: {} }
+        response: { headers: {} },
       };
 
       await service.process(request);
-      
+
       expect(request.transformations).toHaveLength(1);
     });
 
-    it('should not filter non-auto resize transforms', async () => {
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+    it("should not filter non-auto resize transforms", async () => {
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
         buffer: TEST_JPEG_BUFFER,
-        metadata: { size: TEST_JPEG_BUFFER.length }
+        metadata: { size: TEST_JPEG_BUFFER.length },
       });
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-url-resize',
+        requestId: "test-url-resize",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
+        origin: { url: "https://example.com/image.jpg" },
         transformations: [
-          { type: 'resize', value: { width: 5000 }, source: 'url' } // URL source, should not be filtered
+          { type: "resize", value: { width: 5000 }, source: "url" }, // URL source, should not be filtered
         ],
-        response: { headers: {} }
+        response: { headers: {} },
       };
 
       await service.process(request);
-      
+
       expect(request.transformations).toHaveLength(1);
     });
   });
 
-  describe('instantiateSharpImage', () => {
-    it('should apply stripExif when specified', async () => {
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+  describe("instantiateSharpImage", () => {
+    it("should apply stripExif when specified", async () => {
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
         buffer: TEST_JPEG_BUFFER,
-        metadata: { size: TEST_JPEG_BUFFER.length }
+        metadata: { size: TEST_JPEG_BUFFER.length },
       });
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-strip-exif',
+        requestId: "test-strip-exif",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
-        transformations: [{ type: 'stripExif', value: true, source: 'url' }],
-        response: { headers: {} }
+        origin: { url: "https://example.com/image.jpg" },
+        transformations: [{ type: "stripExif", value: true, source: "url" }],
+        response: { headers: {} },
       };
 
       const result = await service.process(request);
       expect(result).toBeInstanceOf(Buffer);
     });
 
-    it('should apply stripIcc when specified', async () => {
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+    it("should apply stripIcc when specified", async () => {
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
         buffer: TEST_JPEG_BUFFER,
-        metadata: { size: TEST_JPEG_BUFFER.length }
+        metadata: { size: TEST_JPEG_BUFFER.length },
       });
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-strip-icc',
+        requestId: "test-strip-icc",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
-        transformations: [{ type: 'stripIcc', value: true, source: 'url' }],
-        response: { headers: {} }
+        origin: { url: "https://example.com/image.jpg" },
+        transformations: [{ type: "stripIcc", value: true, source: "url" }],
+        response: { headers: {} },
       };
 
       const result = await service.process(request);
@@ -268,59 +280,126 @@ describe('ImageProcessorService', () => {
     });
   });
 
-  describe('error handling', () => {
-    it('should wrap errors via ErrorMapper', async () => {
-      const originalError = new Error('Fetch failed');
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockRejectedValue(originalError);
-      jest.spyOn(ErrorMapper, 'mapError');
+  describe("error handling", () => {
+    it("should wrap errors via ErrorMapper", async () => {
+      const originalError = new Error("Fetch failed");
+      jest.spyOn(service["originFetcher"], "fetchImage").mockRejectedValue(originalError);
+      jest.spyOn(ErrorMapper, "mapError");
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-error',
+        requestId: "test-error",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
+        origin: { url: "https://example.com/image.jpg" },
         transformations: [],
-        response: { headers: {} }
+        response: { headers: {} },
       };
 
       await expect(service.process(request)).rejects.toThrow();
       expect(ErrorMapper.mapError).toHaveBeenCalledWith(originalError);
     });
 
-    it('should pass through ImageProcessingError unchanged', async () => {
-      const processingError = new ImageProcessingError(404, 'NotFound', 'Image not found');
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockRejectedValue(processingError);
+    it("should pass through ImageProcessingError unchanged", async () => {
+      const processingError = new ImageProcessingError(404, "NotFound", "Image not found");
+      jest.spyOn(service["originFetcher"], "fetchImage").mockRejectedValue(processingError);
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-processing-error',
+        requestId: "test-processing-error",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.jpg' },
+        origin: { url: "https://example.com/image.jpg" },
         transformations: [],
-        response: { headers: {} }
+        response: { headers: {} },
       };
 
       await expect(service.process(request)).rejects.toThrow(processingError);
     });
   });
 
-  describe('animated GIF handling', () => {
-    it('should re-instantiate with animated=false for single-frame GIF', async () => {
-      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
-        buffer: TEST_GIF_BUFFER,
-        metadata: { size: TEST_GIF_BUFFER.length, format: 'gif' }
+  describe("alpha-to-jpeg defense in depth", () => {
+    it("should rewrite jpeg format to webp when source has alpha and webp is accepted", async () => {
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
+        buffer: TEST_TRANSPARENT_PNG_BUFFER,
+        metadata: { size: TEST_TRANSPARENT_PNG_BUFFER.length, format: "png" },
       });
 
       const request: ImageProcessingRequest = {
-        requestId: 'test-single-frame-gif',
+        requestId: "test-alpha-webp",
         timestamp: Date.now(),
-        origin: { url: 'https://example.com/image.gif' },
-        sourceImageContentType: 'image/gif',
-        transformations: [{ type: 'resize', value: { width: 50 }, source: 'url' }],
-        response: { headers: {} }
+        origin: { url: "https://example.com/icon.png" },
+        sourceImageContentType: "image/png",
+        clientHeaders: { "dit-accept": "image/webp,image/jpeg" },
+        transformations: [{ type: "format", value: "jpeg", source: "url" }],
+        response: { headers: {} },
+      };
+
+      await service.process(request);
+
+      expect(request.transformations[0].value).toBe("webp");
+      expect(request.response.contentType).toBe("image/webp");
+    });
+
+    it("should rewrite jpeg format to png when source has alpha and webp is not accepted", async () => {
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
+        buffer: TEST_TRANSPARENT_PNG_BUFFER,
+        metadata: { size: TEST_TRANSPARENT_PNG_BUFFER.length, format: "png" },
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: "test-alpha-png",
+        timestamp: Date.now(),
+        origin: { url: "https://example.com/icon.png" },
+        sourceImageContentType: "image/png",
+        clientHeaders: { "dit-accept": "image/jpeg" },
+        transformations: [{ type: "format", value: "jpeg", source: "url" }],
+        response: { headers: {} },
+      };
+
+      await service.process(request);
+
+      expect(request.transformations[0].value).toBe("png");
+      expect(request.response.contentType).toBe("image/png");
+    });
+
+    it("should leave jpeg format unchanged when source has no alpha", async () => {
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
+        buffer: TEST_JPEG_BUFFER,
+        metadata: { size: TEST_JPEG_BUFFER.length, format: "jpeg" },
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: "test-opaque-jpeg",
+        timestamp: Date.now(),
+        origin: { url: "https://example.com/photo.jpg" },
+        sourceImageContentType: "image/jpeg",
+        clientHeaders: { "dit-accept": "image/webp,image/jpeg" },
+        transformations: [{ type: "format", value: "jpeg", source: "url" }],
+        response: { headers: {} },
+      };
+
+      await service.process(request);
+
+      expect(request.transformations[0].value).toBe("jpeg");
+      expect(request.response.contentType).toBe("image/jpeg");
+    });
+  });
+
+  describe("animated GIF handling", () => {
+    it("should re-instantiate with animated=false for single-frame GIF", async () => {
+      jest.spyOn(service["originFetcher"], "fetchImage").mockResolvedValue({
+        buffer: TEST_GIF_BUFFER,
+        metadata: { size: TEST_GIF_BUFFER.length, format: "gif" },
+      });
+
+      const request: ImageProcessingRequest = {
+        requestId: "test-single-frame-gif",
+        timestamp: Date.now(),
+        origin: { url: "https://example.com/image.gif" },
+        sourceImageContentType: "image/gif",
+        transformations: [{ type: "resize", value: { width: 50 }, source: "url" }],
+        response: { headers: {} },
       };
 
       const result = await service.process(request);
       expect(result).toBeInstanceOf(Buffer);
     });
   });
-
 });
