@@ -40,6 +40,11 @@ describe("index", () => {
       mock.mockReset();
     });
     process.env = { ...OLD_ENV };
+    // Pin cache-control behavior for deterministic assertions in these legacy tests.
+    // The stale-while-revalidate/stale-if-error augmentation is covered by dedicated tests
+    // in solution-utils/test and the setup.spec SWR cases.
+    process.env.ENABLE_STALE_CACHE_CONTROL = "No";
+    process.env.DEFAULT_CACHE_MAX_AGE = "31536000";
   });
 
   afterAll(() => {

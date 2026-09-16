@@ -11,7 +11,7 @@ import {
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 
 import { getOptions } from "../solution-utils/get-options";
-import { isNullOrWhiteSpace } from "../solution-utils/helpers";
+import { isNullOrWhiteSpace, buildCacheControl } from "../solution-utils/helpers";
 import { ImageHandler } from "./image-handler";
 import { ImageRequest } from "./image-request";
 import {
@@ -212,7 +212,8 @@ function buildErrorResponseParams(getObjectEvent, error: ImageHandlerError) {
  *
  * Cache-Control rules:
  * - 4xx errors: max-age=10,public
- * - 5xx errors: max-age=600,public
+ * - 5xx errors: short max-age + stale-if-error so CloudFront keeps serving previously
+ *   cached (stale) content instead of forwarding origin 5xx errors to end users.
  */
 function buildResponseHeaders(finalResponse: ImageHandlerExecutionResult): Record<string, string> {
   const filteredHeaders = Object.entries(finalResponse.headers).filter(([_, value]) => value !== undefined);
@@ -225,9 +226,27 @@ function buildResponseHeaders(finalResponse: ImageHandlerExecutionResult): Recor
     responseHeaders["Cache-Control"] = "max-age=10,public";
   }
   if (finalResponse.statusCode >= 500 && finalResponse.statusCode < 599) {
-    responseHeaders["Cache-Control"] = "max-age=600,public";
+    responseHeaders["Cache-Control"] = buildErrorCacheControl();
   }
   return responseHeaders;
+}
+
+/**
+ * Builds the Cache-Control header for origin 5xx responses. Keeps a short max-age so the error
+ * itself is not cached for long, while adding stale-if-error so CloudFront continues to serve
+ * previously cached content during an origin outage instead of surfacing 5xx to users.
+ * Configurable via ERROR_CACHE_MAX_AGE (default 600) and STALE_IF_ERROR_SECONDS (default 86400).
+ * @returns Cache-Control header value for 5xx responses.
+ */
+function buildErrorCacheControl(): string {
+  const { ERROR_CACHE_MAX_AGE, STALE_IF_ERROR_SECONDS, ENABLE_STALE_CACHE_CONTROL } = process.env;
+  const maxAge = !isNullOrWhiteSpace(ERROR_CACHE_MAX_AGE) ? parseInt(ERROR_CACHE_MAX_AGE, 10) : 600;
+  const sie = !isNullOrWhiteSpace(STALE_IF_ERROR_SECONDS) ? parseInt(STALE_IF_ERROR_SECONDS, 10) : 86400;
+  const directives = [`max-age=${Number.isFinite(maxAge) && maxAge >= 0 ? maxAge : 600}`, "public"];
+  if (ENABLE_STALE_CACHE_CONTROL !== "No" && Number.isFinite(sie) && sie > 0) {
+    directives.push(`stale-if-error=${sie}`);
+  }
+  return directives.join(",");
 }
 
 /**
@@ -292,8 +311,8 @@ export async function handleDefaultFallbackImage(
     headers["Cache-Control"] = imageRequest.parseImageHeaders(event, RequestTypes.DEFAULT)?.["Cache-Control"];
   } catch {}
 
-  // Prioritize Cache-Control header attached to the fallback image followed by Cache-Control header provided in request, followed by the default
-  headers["Cache-Control"] = defaultFallbackImage.CacheControl ?? headers["Cache-Control"] ?? "max-age=31536000,public";
+  // Prioritize Cache-Control header attached to the fallback image followed by Cache-Control header provided in request, followed by the SWR-augmented default
+  headers["Cache-Control"] = defaultFallbackImage.CacheControl ?? headers["Cache-Control"] ?? buildCacheControl();
 
   return {
     statusCode: error.status ? error.status : StatusCodes.INTERNAL_SERVER_ERROR,

@@ -30,6 +30,10 @@ describe("setup", () => {
       mock.mockReset();
     });
     process.env = { ...OLD_ENV };
+    // Pin cache-control behavior for deterministic assertions (SWR augmentation is covered
+    // by dedicated tests in solution-utils/test/helpers.spec.ts).
+    process.env.ENABLE_STALE_CACHE_CONTROL = "No";
+    process.env.DEFAULT_CACHE_MAX_AGE = "31536000";
   });
 
   afterEach(() => {
@@ -228,7 +232,9 @@ describe("setup", () => {
         rotate: 90,
       },
       originalImage: mockImage,
-      cacheControl: "max-age=300,public",
+      // SWR directives are appended because this test sets its own process.env (clearing the
+      // beforeEach pin), so stale-while-revalidate/stale-if-error augmentation is active.
+      cacheControl: "max-age=300,public,stale-while-revalidate=86400,stale-if-error=86400",
       contentType: "image/jpeg",
       expires: "Tue, 24 Dec 2019 13:46:28 GMT",
       lastModified: "Sat, 19 Dec 2009 16:30:47 GMT",
@@ -274,7 +280,7 @@ describe("setup", () => {
         rotate: 90,
       },
       originalImage: mockImage,
-      cacheControl: "max-age=300,public",
+      cacheControl: "max-age=300,public,stale-while-revalidate=86400,stale-if-error=86400",
       contentType: "image/jpeg",
       expires: "Tue, 24 Dec 2019 13:46:28 GMT",
       lastModified: "Sat, 19 Dec 2009 16:30:47 GMT",
@@ -795,7 +801,9 @@ describe("setup", () => {
       headers: undefined,
       outputFormat: "jpeg",
       originalImage: mockImage,
-      cacheControl: "max-age=31536000,public",
+      // process.env is reassigned in this test (clearing the beforeEach pin), so SWR is active
+      // and the 90-day default max-age is used (no source CacheControl, no DEFAULT_CACHE_MAX_AGE set).
+      cacheControl: "max-age=7776000,public,stale-while-revalidate=86400,stale-if-error=86400",
       contentType: "image/jpeg",
     };
     // Assert
