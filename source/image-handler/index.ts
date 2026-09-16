@@ -1,6 +1,8 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+// New Relic must be imported before other modules for full instrumentation
+import newrelic from "newrelic";
 import { RekognitionClient } from "@aws-sdk/client-rekognition";
 import {
   S3Client,
@@ -26,6 +28,7 @@ import {
   StatusCodes,
 } from "./lib";
 import { SecretProvider } from "./secret-provider";
+import { createAirbrakeNotifier } from "./observability";
 // eslint-disable-next-line import/no-unresolved
 import { Context } from "aws-lambda";
 
@@ -34,6 +37,7 @@ const s3Client = new S3Client({ ...awsSdkOptions, followRegionRedirects: true })
 const rekognitionClient = new RekognitionClient(awsSdkOptions);
 const secretsManagerClient = new SecretsManagerClient(awsSdkOptions);
 const secretProvider = new SecretProvider(secretsManagerClient);
+const airbrake = createAirbrakeNotifier();
 
 const LAMBDA_PAYLOAD_LIMIT = 6 * 1024 * 1024;
 
@@ -43,7 +47,7 @@ const LAMBDA_PAYLOAD_LIMIT = 6 * 1024 * 1024;
  * @param context The request context
  * @returns Processed request response.
  */
-export async function handler(
+async function imageHandler(
   event: ImageHandlerEvent | S3Event,
   context: Context = undefined
 ): Promise<void | ImageHandlerExecutionResult | S3HeadObjectResult> {
@@ -82,6 +86,7 @@ export async function handler(
     await s3Client.send(new WriteGetObjectResponseCommand(params));
   } catch (error) {
     console.error("Error occurred while writing the response to S3 Object Lambda.", error);
+    await airbrake?.notify(error);
     const errorParams = buildErrorResponseParams(
       getObjectEvent,
       new ImageHandlerError(
@@ -93,6 +98,9 @@ export async function handler(
     await s3Client.send(new WriteGetObjectResponseCommand(errorParams));
   }
 }
+
+// Wrap handler with New Relic for Lambda instrumentation
+export const handler = newrelic.setLambdaHandler(imageHandler);
 
 /**
  * Image handler request handler.
@@ -151,6 +159,7 @@ async function handleRequest(event: ImageHandlerEvent): Promise<ImageHandlerExec
     };
   } catch (error) {
     console.error(error);
+    await airbrake?.notify(error);
 
     // Default fallback image
     const { ENABLE_DEFAULT_FALLBACK_IMAGE, DEFAULT_FALLBACK_IMAGE_BUCKET, DEFAULT_FALLBACK_IMAGE_KEY } = process.env;
@@ -163,6 +172,7 @@ async function handleRequest(event: ImageHandlerEvent): Promise<ImageHandlerExec
         return await handleDefaultFallbackImage(imageRequest, event, isAlb, error);
       } catch (error) {
         console.error("Error occurred while getting the default fallback image.", error);
+        await airbrake?.notify(error);
       }
     }
 

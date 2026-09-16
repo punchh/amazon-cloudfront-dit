@@ -199,6 +199,27 @@ export class ServerlessImageHandlerStack extends Stack {
       allowedPattern: "^$|^E[A-Z0-9]{8,}$",
     });
 
+    const newRelicLicenseKeyParameter = new CfnParameter(this, "NewRelicLicenseKeyParameter", {
+      type: "String",
+      description:
+        "(Optional) New Relic license key for APM and distributed tracing. Leave empty to disable New Relic.",
+      default: "",
+      noEcho: true,
+    });
+
+    const airbrakeProjectIdParameter = new CfnParameter(this, "AirbrakeProjectIdParameter", {
+      type: "String",
+      description: "(Optional) Airbrake project ID for error tracking. Leave empty to disable Airbrake.",
+      default: "",
+    });
+
+    const airbrakeProjectKeyParameter = new CfnParameter(this, "AirbrakeProjectKeyParameter", {
+      type: "String",
+      description: "(Optional) Airbrake project key for error tracking. Leave empty to disable Airbrake.",
+      default: "",
+      noEcho: true,
+    });
+
     /* eslint-disable no-new */
     new CfnRule(this, "ExistingDistributionIdRequiredRule", {
       ruleCondition: Fn.conditionEquals(useExistingCloudFrontDistribution.valueAsString, "Yes"),
@@ -250,6 +271,11 @@ export class ServerlessImageHandlerStack extends Stack {
       enableS3ObjectLambda: enableS3ObjectLambdaParameter.valueAsString,
       useExistingCloudFrontDistribution: useExistingCloudFrontDistribution.valueAsString as YesNo,
       existingCloudFrontDistributionId: existingCloudFrontDistributionId.valueAsString,
+      observability: {
+        newRelicLicenseKey: newRelicLicenseKeyParameter.valueAsString,
+        airbrakeProjectId: airbrakeProjectIdParameter.valueAsString,
+        airbrakeProjectKey: airbrakeProjectKeyParameter.valueAsString,
+      },
     };
 
     const commonResources = new CommonResources(this, "CommonResources", {

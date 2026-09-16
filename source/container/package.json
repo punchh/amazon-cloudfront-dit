@@ -18,6 +18,7 @@
     "lint:fix": "eslint src/**/*.ts --fix"
   },
   "dependencies": {
+    "@airbrake/node": "^2.1.9",
     "@aws-sdk/client-dynamodb": "^3.993.0",
     "@aws-sdk/client-rekognition": "^3.993.0",
     "@aws-sdk/client-s3": "^3.993.0",
@@ -30,6 +31,7 @@
     "express": "^4.18.2",
     "helmet": "^7.1.0",
     "morgan": "^1.10.1",
+    "newrelic": "^14.1.1",
     "qs": "^6.14.2",
     "sharp": "^0.34.3",
     "zod": "^4.1.4"

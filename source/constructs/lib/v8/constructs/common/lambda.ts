@@ -36,11 +36,14 @@ export class DITNodejsFunction extends NodejsFunction {
       memorySize: DIT_LAMBDA_DEFAULT_MEMORY_SIZE,
       timeout: DIT_LAMBDA_DEFAULT_TIMEOUT,
       logGroup: logGroup,
+      ...props,
       bundling: {
         minify: true,
         sourceMap: true,
+        ...props?.bundling,
+        externalModules: [...(props?.bundling?.externalModules ?? []), "newrelic", "@airbrake/node"],
+        nodeModules: [...(props?.bundling?.nodeModules ?? []), "newrelic", "@airbrake/node"],
       },
-      ...props,
       environment: {
         SOLUTION_ID: SOLUTION_ID ?? scope.node.tryGetContext("solutionId"),
         SOLUTION_VERSION: VERSION ?? scope.node.tryGetContext("solutionVersion"),

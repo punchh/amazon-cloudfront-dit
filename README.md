@@ -90,6 +90,9 @@ cd $MAIN_DIRECTORY/source/constructs
 npm run clean:install
 overrideWarningsEnabled=false npx cdk bootstrap --profile <PROFILE_NAME>
 
+# Set this before each stack deployment to keep New Relic app names unique per stack
+export NEW_RELIC_APP_NAME=<STACK_SPECIFIC_NEW_RELIC_APP_NAME>
+
 ## deploy lambda architecture stack
 overrideWarningsEnabled=false npx cdk deploy v7-Stack\
  --parameters DeployDemoUIParameter=Yes\
@@ -104,6 +107,7 @@ _Note:_
 - **MY_BUCKET**: name of an existing bucket or the list of comma-separated bucket names in your account
 - **PROFILE_NAME**: name of an AWS CLI profile that has appropriate credentials for deploying in your preferred region
 - **MY_EMAIL**: email for the admin user who can configure origins, transformation policies and mappings
+- **STACK_SPECIFIC_NEW_RELIC_APP_NAME**: New Relic application name to inject into Lambda/ECS runtime environments. Set this environment variable in the shell (or CI/CD job) where you run `cdk deploy`, and use a different value for each stack rollout.
 
 # Collection of operational metrics
 

@@ -519,6 +519,28 @@ exports[`ImageProcessingStack Snapshot Test 1`] = `
                 "Value": "v8.0.4",
               },
               {
+                "Name": "NEW_RELIC_APP_NAME",
+                "Value": {
+                  "Ref": "AWS::StackName",
+                },
+              },
+              {
+                "Name": "NEW_RELIC_NO_CONFIG_FILE",
+                "Value": "true",
+              },
+              {
+                "Name": "NEW_RELIC_LICENSE_KEY",
+                "Value": "",
+              },
+              {
+                "Name": "AIRBRAKE_PROJECT_ID",
+                "Value": "",
+              },
+              {
+                "Name": "AIRBRAKE_PROJECT_KEY",
+                "Value": "",
+              },
+              {
                 "Name": "DDB_TABLE_NAME",
                 "Value": {
                   "Fn::Select": [
@@ -1729,6 +1751,8 @@ async function handler(event) {
         },
         "Environment": {
           "Variables": {
+            "AIRBRAKE_PROJECT_ID": "",
+            "AIRBRAKE_PROJECT_KEY": "",
             "ECS_CLUSTER_NAME": {
               "Ref": "AlbEcsClusterBF96B8E6",
             },
@@ -1738,6 +1762,11 @@ async function handler(event) {
                 "Name",
               ],
             },
+            "NEW_RELIC_APP_NAME": {
+              "Ref": "AWS::StackName",
+            },
+            "NEW_RELIC_LICENSE_KEY": "",
+            "NEW_RELIC_NO_CONFIG_FILE": "true",
             "SOLUTION_ID": "SO0023",
             "SOLUTION_VERSION": "v8.0.4",
           },

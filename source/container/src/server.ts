@@ -1,6 +1,9 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+// New Relic must be the very first import for full Express/http instrumentation.
+// The agent runs in no-op mode when NEW_RELIC_LICENSE_KEY is not configured.
+import "newrelic";
 import http from 'http';
 import app from './app';
 

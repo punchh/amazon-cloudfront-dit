@@ -3,6 +3,16 @@
 
 export type YesNo = "Yes" | "No";
 
+/**
+ * Observability configuration for New Relic and Airbrake.
+ * All fields are optional; observability tools activate only when credentials are provided.
+ */
+export interface ObservabilityConfig {
+  readonly newRelicLicenseKey?: string;
+  readonly airbrakeProjectId?: string;
+  readonly airbrakeProjectKey?: string;
+}
+
 export interface SolutionConstructProps {
   readonly corsEnabled: string;
   readonly corsOrigin: string;
@@ -20,4 +30,5 @@ export interface SolutionConstructProps {
   readonly enableS3ObjectLambda: string;
   readonly useExistingCloudFrontDistribution: YesNo;
   readonly existingCloudFrontDistributionId: string;
+  readonly observability?: ObservabilityConfig;
 }

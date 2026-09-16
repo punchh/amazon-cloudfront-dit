@@ -121,10 +121,15 @@ export class BackEnd extends Construct {
         SOLUTION_VERSION: props.solutionVersion,
         SOLUTION_ID: props.solutionId,
         SHARP_SIZE_LIMIT: props.sharpSizeLimit,
+        NEW_RELIC_LICENSE_KEY: props.observability?.newRelicLicenseKey ?? "",
+        NEW_RELIC_APP_NAME: process.env.NEW_RELIC_APP_NAME ?? Stack.of(this).stackName,
+        NEW_RELIC_NO_CONFIG_FILE: "true",
+        AIRBRAKE_PROJECT_ID: props.observability?.airbrakeProjectId ?? "",
+        AIRBRAKE_PROJECT_KEY: props.observability?.airbrakeProjectKey ?? "",
       },
       bundling: {
-        externalModules: ["sharp"],
-        nodeModules: ["sharp"],
+        externalModules: ["sharp", "newrelic", "@airbrake/node"],
+        nodeModules: ["sharp", "newrelic", "@airbrake/node"],
         commandHooks: {
           beforeBundling(inputDir: string, outputDir: string): string[] {
             return [];
