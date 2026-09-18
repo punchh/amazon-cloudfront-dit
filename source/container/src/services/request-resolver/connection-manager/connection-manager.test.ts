@@ -28,6 +28,14 @@ describe('ConnectionManager', () => {
     jest.clearAllMocks();
   });
 
+  it('should initialize S3Client with followRegionRedirects for cross-region origins', () => {
+    (S3Client as jest.Mock).mockClear();
+    new ConnectionManager();
+    expect(S3Client).toHaveBeenCalledWith(
+      expect.objectContaining({ followRegionRedirects: true })
+    );
+  });
+
   describe('validateOriginUrl', () => {
     beforeEach(() => {
       (S3UrlHelper.isS3Url as jest.Mock).mockReturnValue(false);
