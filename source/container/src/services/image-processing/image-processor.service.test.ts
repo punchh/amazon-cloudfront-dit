@@ -10,6 +10,9 @@ import sharp from 'sharp';
 
 let TEST_JPEG_BUFFER: Buffer;
 let TEST_GIF_BUFFER: Buffer;
+let TEST_ANIMATED_WEBP_BUFFER: Buffer;
+let TEST_STILL_WEBP_BUFFER: Buffer;
+let TEST_APNG_BUFFER: Buffer;
 
 beforeAll(async () => {
   // Generate valid test images using Sharp
@@ -20,6 +23,34 @@ beforeAll(async () => {
   TEST_GIF_BUFFER = await sharp({
     create: { width: 100, height: 100, channels: 3, background: { r: 0, g: 0, b: 255 } }
   }).gif().toBuffer();
+
+  const frames = await Promise.all([
+    { r: 0, g: 255, b: 0 },
+    { r: 255, g: 0, b: 0 },
+    { r: 0, g: 0, b: 255 },
+  ].map(background => sharp({
+    create: { width: 50, height: 50, channels: 4, background: { ...background, alpha: 1 } }
+  }).png().toBuffer()));
+  TEST_ANIMATED_WEBP_BUFFER = await sharp(frames, { join: { animated: true } })
+    .webp({ loop: 0, delay: [100, 100, 100] })
+    .toBuffer();
+
+  TEST_STILL_WEBP_BUFFER = await sharp({
+    create: { width: 50, height: 50, channels: 4, background: { r: 0, g: 255, b: 0, alpha: 1 } }
+  }).webp().toBuffer();
+
+  const PNG_SIG = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+  const buildChunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length, 0);
+    return Buffer.concat([len, Buffer.from(type, 'ascii'), data, Buffer.alloc(4)]);
+  };
+  TEST_APNG_BUFFER = Buffer.concat([
+    PNG_SIG,
+    buildChunk('IHDR', Buffer.alloc(13)),
+    buildChunk('acTL', Buffer.alloc(8)),
+    buildChunk('IDAT', Buffer.alloc(16)),
+  ]);
 });
 
 describe('ImageProcessorService', () => {
@@ -68,6 +99,44 @@ describe('ImageProcessorService', () => {
 
       const result = await service.process(request);
       expect(result).toBe(mockBuffer);
+    });
+
+    it('should pass ICO through unchanged regardless of transformations', async () => {
+      const icoBuffer = Buffer.from('00000100', 'hex');
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: icoBuffer,
+        metadata: { size: icoBuffer.length, format: 'x-icon' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-ico-1',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/favicon.ico' },
+        sourceImageContentType: 'image/x-icon',
+        transformations: [{ type: 'format', value: 'webp', source: 'auto' }],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(result).toBe(icoBuffer);
+      expect(request.response.contentType).toBe('image/x-icon');
+    });
+
+    it('should pass image/vnd.microsoft.icon through unchanged', async () => {
+      const icoBuffer = Buffer.from('00000100', 'hex');
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: icoBuffer,
+        metadata: { size: icoBuffer.length }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-ico-2',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/favicon.ico' },
+        sourceImageContentType: 'image/vnd.microsoft.icon',
+        transformations: [{ type: 'resize', value: { width: 100 }, source: 'url' }],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(result).toBe(icoBuffer);
+      expect(request.response.contentType).toBe('image/vnd.microsoft.icon');
     });
   });
 
@@ -320,6 +389,249 @@ describe('ImageProcessorService', () => {
 
       const result = await service.process(request);
       expect(result).toBeInstanceOf(Buffer);
+    });
+  });
+
+  describe('animated WebP handling', () => {
+    it('should preserve animation when source is animated WebP and output is webp', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_ANIMATED_WEBP_BUFFER,
+        metadata: { size: TEST_ANIMATED_WEBP_BUFFER.length, format: 'webp' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-animated-webp',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/anim.webp' },
+        sourceImageContentType: 'image/webp',
+        transformations: [{ type: 'resize', value: { width: 25 }, source: 'url' }],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(result).toBeInstanceOf(Buffer);
+      const outMeta = await sharp(result, { animated: true }).metadata();
+      expect(outMeta.pages).toBeGreaterThan(1);
+      expect(request.response.contentType).toBe('image/webp');
+    });
+
+    it('should re-instantiate with animated=false for single-frame WebP', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_STILL_WEBP_BUFFER,
+        metadata: { size: TEST_STILL_WEBP_BUFFER.length, format: 'webp' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-still-webp',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/still.webp' },
+        sourceImageContentType: 'image/webp',
+        transformations: [{ type: 'resize', value: { width: 25 }, source: 'url' }],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(result).toBeInstanceOf(Buffer);
+      const outMeta = await sharp(result).metadata();
+      expect(outMeta.pages === undefined || outMeta.pages <= 1).toBe(true);
+    });
+  });
+
+  describe('animated PNG passthrough', () => {
+    it('should pass APNG through unchanged', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_APNG_BUFFER,
+        metadata: { size: TEST_APNG_BUFFER.length, format: 'png' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-apng',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/anim.png' },
+        sourceImageContentType: 'image/png',
+        transformations: [{ type: 'format', value: 'webp', source: 'auto' }],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(result).toBe(TEST_APNG_BUFFER);
+      expect(request.response.contentType).toBe('image/png');
+    });
+
+    it('should still process a still PNG', async () => {
+      const stillPng = await sharp({
+        create: { width: 20, height: 20, channels: 3, background: { r: 255, g: 255, b: 255 } }
+      }).png().toBuffer();
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: stillPng,
+        metadata: { size: stillPng.length, format: 'png' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-still-png',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/still.png' },
+        sourceImageContentType: 'image/png',
+        transformations: [{ type: 'resize', value: { width: 10 }, source: 'url' }],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(result).not.toBe(stillPng);
+      const meta = await sharp(result).metadata();
+      expect(meta.width).toBe(10);
+    });
+  });
+
+  describe('SVG passthrough', () => {
+    it('should rasterize SVG when a format transformation is present', async () => {
+      const svgBuffer = Buffer.from('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>');
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: svgBuffer,
+        metadata: { size: svgBuffer.length, format: 'svg' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-svg-1',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/icon.svg' },
+        sourceImageContentType: 'image/svg+xml',
+        transformations: [{ type: 'format', value: 'webp', source: 'auto' }],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(result).not.toBe(svgBuffer);
+      expect(request.response.contentType).toBe('image/webp');
+      const outMeta = await sharp(result).metadata();
+      expect(outMeta.format).toBe('webp');
+    });
+
+    it('should pass SVG through unchanged when there is no format transformation', async () => {
+      const svgBuffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>');
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: svgBuffer,
+        metadata: { size: svgBuffer.length, format: 'svg' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-svg-2',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/badge.svg' },
+        sourceImageContentType: 'image/svg+xml',
+        transformations: [{ type: 'resize', value: { width: 100 }, source: 'url' }],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(result).toBe(svgBuffer);
+      expect(request.response.contentType).toBe('image/svg+xml');
+    });
+  });
+
+  describe('BMP passthrough', () => {
+    it('should pass image/bmp through unchanged', async () => {
+      const bmpBuffer = Buffer.from([0x42, 0x4D, 0x00, 0x00]);
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: bmpBuffer,
+        metadata: { size: bmpBuffer.length, format: 'bmp' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-bmp-1',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/card.bmp' },
+        sourceImageContentType: 'image/bmp',
+        transformations: [{ type: 'resize', value: { width: 282 }, source: 'url' }],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(result).toBe(bmpBuffer);
+      expect(request.response.contentType).toBe('image/bmp');
+    });
+
+    it('should pass image/x-ms-bmp through unchanged', async () => {
+      const bmpBuffer = Buffer.from([0x42, 0x4D, 0x00, 0x00]);
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: bmpBuffer,
+        metadata: { size: bmpBuffer.length, format: 'bmp' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-bmp-2',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/card.bmp' },
+        sourceImageContentType: 'image/x-ms-bmp',
+        transformations: [{ type: 'format', value: 'webp', source: 'auto' }],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(result).toBe(bmpBuffer);
+      expect(request.response.contentType).toBe('image/x-ms-bmp');
+    });
+  });
+
+  describe('animated WebP to GIF fallback', () => {
+    it('converts animated WebP to GIF when dit-webp-fallback=gif is set', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_ANIMATED_WEBP_BUFFER,
+        metadata: { size: TEST_ANIMATED_WEBP_BUFFER.length, format: 'webp' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-anim-webp-fallback',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/anim.webp' },
+        clientHeaders: { 'dit-webp-fallback': 'gif' },
+        sourceImageContentType: 'image/webp',
+        transformations: [],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(request.response.contentType).toBe('image/gif');
+      const outMeta = await sharp(result, { animated: true }).metadata();
+      expect(outMeta.format).toBe('gif');
+      expect(outMeta.pages).toBeGreaterThan(1);
+    });
+
+    it('leaves static WebP alone even when dit-webp-fallback=gif is set', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_STILL_WEBP_BUFFER,
+        metadata: { size: TEST_STILL_WEBP_BUFFER.length, format: 'webp' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-still-webp-fallback',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/still.webp' },
+        clientHeaders: { 'dit-webp-fallback': 'gif' },
+        sourceImageContentType: 'image/webp',
+        transformations: [],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(request.response.contentType).toBe('image/webp');
+      expect(result).toBe(TEST_STILL_WEBP_BUFFER);
+    });
+
+    it('does not convert when dit-webp-fallback header is absent', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_ANIMATED_WEBP_BUFFER,
+        metadata: { size: TEST_ANIMATED_WEBP_BUFFER.length, format: 'webp' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-anim-webp-no-fallback',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/anim.webp' },
+        sourceImageContentType: 'image/webp',
+        transformations: [],
+        response: { headers: {} }
+      };
+      const result = await service.process(request);
+      expect(request.response.contentType).toBe('image/webp');
+      expect(result).toBe(TEST_ANIMATED_WEBP_BUFFER);
+    });
+
+    it('respects an explicit format transformation on animated WebP', async () => {
+      jest.spyOn(service['originFetcher'], 'fetchImage').mockResolvedValue({
+        buffer: TEST_ANIMATED_WEBP_BUFFER,
+        metadata: { size: TEST_ANIMATED_WEBP_BUFFER.length, format: 'webp' }
+      });
+      const request: ImageProcessingRequest = {
+        requestId: 'test-explicit-format-wins',
+        timestamp: Date.now(),
+        origin: { url: 'https://example.com/anim.webp' },
+        clientHeaders: { 'dit-webp-fallback': 'gif' },
+        sourceImageContentType: 'image/webp',
+        transformations: [{ type: 'format', value: 'webp', source: 'url' }],
+        response: { headers: {} }
+      };
+      await service.process(request);
+      expect(request.response.contentType).toBe('image/webp');
     });
   });
 

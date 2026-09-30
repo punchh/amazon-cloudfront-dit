@@ -155,6 +155,13 @@ export class OriginFetcher {
       'image/tiff',
       'image/avif',
       'image/heif',
+      'image/x-icon',
+      'image/vnd.microsoft.icon',
+      'image/ico',
+      'image/svg+xml',
+      'image/bmp',
+      'image/x-bmp',
+      'image/x-ms-bmp',
     ];
     return validTypes.some(type => contentType.toLowerCase().includes(type));
   }

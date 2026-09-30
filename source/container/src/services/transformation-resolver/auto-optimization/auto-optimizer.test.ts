@@ -111,6 +111,47 @@ describe('applyAutoOptimizations', () => {
       expect(result[0]).toEqual({ type: 'format', value: 'avif', source: 'auto' });
     });
 
+    it('should skip format optimization when source is ICO', () => {
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/webp' };
+      const imageRequest = { sourceImageContentType: 'image/x-icon' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should skip format optimization when source is BMP', () => {
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/webp' };
+      const imageRequest = { sourceImageContentType: 'image/bmp' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should still emit format optimization when source is SVG', () => {
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/webp' };
+      const imageRequest = { sourceImageContentType: 'image/svg+xml' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ type: 'format', value: 'webp', source: 'auto' });
+    });
+
+    it('should skip format conversion when source is WebP and selected format is JPEG', () => {
+      mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
+      mockRequest.headers = { 'dit-accept': 'image/jpeg' };
+      const imageRequest = { sourceImageContentType: 'image/webp' } as ImageProcessingRequest;
+
+      const result = applyAutoOptimizations(baseTransformations, mockRequest as Request, mockPolicy, imageRequest);
+
+      expect(result).toHaveLength(0);
+    });
+
     it('should not restrict format selection for non-GIF sources', () => {
       mockPolicy.outputs = [{ type: 'format', value: 'auto' }];
       mockRequest.headers = { 'dit-accept': 'image/jpeg' };
