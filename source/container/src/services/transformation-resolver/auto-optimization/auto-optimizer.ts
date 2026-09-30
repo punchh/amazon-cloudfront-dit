@@ -74,9 +74,22 @@ function getFormatOptimizations(req: Request, formatConfig: any, imageRequest?: 
     return [];
   }
   
-  // Skip format conversion if source is a GIF and selected format cannot carry animation
-  const sourceIsGif = imageRequest?.sourceImageContentType === 'image/gif';
-  if (sourceIsGif && !ANIMATION_CAPABLE_FORMATS.has(selectedFormat)) {
+  const sourceContentType = imageRequest?.sourceImageContentType;
+  if (
+    sourceContentType === 'image/x-icon' ||
+    sourceContentType === 'image/vnd.microsoft.icon' ||
+    sourceContentType === 'image/ico' ||
+    sourceContentType === 'image/bmp' ||
+    sourceContentType === 'image/x-bmp' ||
+    sourceContentType === 'image/x-ms-bmp'
+  ) {
+    return [];
+  }
+
+  // Skip format conversion if the source may be animated and the selected format cannot carry animation.
+  // SVG is intentionally not skipped so a format transform can rasterize it.
+  const sourceMayBeAnimated = sourceContentType === 'image/gif' || sourceContentType === 'image/webp';
+  if (sourceMayBeAnimated && !ANIMATION_CAPABLE_FORMATS.has(selectedFormat)) {
     return [];
   }
 

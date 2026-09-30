@@ -69,6 +69,10 @@ router.get('*', async (req: Request, res: Response) => {
     // "thundering herd" on cache expiry. Preserves any upstream max-age when present.
     res.set('Cache-Control', buildCacheControl(imageRequest.response.headers?.['Cache-Control']));
     res.type(imageRequest.response.contentType || 'image/jpeg');
+    // Force inline rendering. Without this, browsers fall back to URL-extension
+    // heuristics; when the URL ends in .jpeg/.png but DIT serves AVIF/WebP,
+    // Chrome treats the mismatch as a download.
+    res.set('Content-Disposition', 'inline');
     res.send(processedImage);
 
     console.log(JSON.stringify({
