@@ -4,6 +4,7 @@
 import { Request } from 'express';
 import { Transformation, TransformationPolicy } from '../../../types/transformation';
 import { ImageProcessingRequest } from '../../../types/image-processing-request';
+import { isSvgContentType } from '../../image-processing/utils/svg-utils';
 
 const FORMAT_PRIORITY = ['webp', 'avif', 'jpeg', 'png', 'heif', 'tiff', 'raw', 'gif'];
 // TODO, DISCUSS WITH TEAM FOR OPTIMAL FORMAT PRIORITIY LIST
@@ -73,7 +74,14 @@ function getFormatOptimizations(req: Request, formatConfig: any, imageRequest?: 
   if (!selectedFormat) {
     return [];
   }
-  
+
+  // SVG sources pass through unchanged downstream (Sharp can't decode them).
+  // Skip format optimization so Gmail's jpeg Accept doesn't trigger a doomed
+  // raster conversion that surfaces as a broken image in the inbox.
+  if (isSvgContentType(imageRequest?.sourceImageContentType)) {
+    return [];
+  }
+
   // Skip format conversion if source is a GIF and selected format cannot carry animation
   const sourceIsGif = imageRequest?.sourceImageContentType === 'image/gif';
   if (sourceIsGif && !ANIMATION_CAPABLE_FORMATS.has(selectedFormat)) {
