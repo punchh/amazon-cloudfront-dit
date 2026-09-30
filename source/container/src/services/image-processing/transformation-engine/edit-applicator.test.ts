@@ -169,7 +169,11 @@ describe('EditApplicator', () => {
 
       await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
 
-      expect(mockImage.toFormat).toHaveBeenCalledWith('png', {});
+      expect(mockImage.toFormat).toHaveBeenCalledWith('png', {
+        palette: true,
+        compressionLevel: 9,
+        adaptiveFiltering: true,
+      });
     });
 
     it('Should fallback to metadata format when toFormat not provided', async () => {
@@ -187,7 +191,44 @@ describe('EditApplicator', () => {
 
       await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
 
-      expect(mockImage.toFormat).toHaveBeenCalledWith('jpeg', { quality: 80 });
+      expect(mockImage.toFormat).toHaveBeenCalledWith('jpeg', { quality: 80, mozjpeg: true });
+    });
+
+    it('Should enable mozjpeg for JPEG format', async () => {
+      const mockImage = createMockSharp();
+      const edits: ImageEdits = { toFormat: 'jpeg' };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('jpeg', { mozjpeg: true });
+    });
+
+    it('Should map quality to GIF optimization options', async () => {
+      const mockImage = createMockSharp();
+      const edits: ImageEdits = { toFormat: 'gif', quality: 80 };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('gif', {
+        colours: 205,
+        effort: 10,
+        interFrameMaxError: 6,
+        interPaletteMaxError: 2,
+      });
+    });
+
+    it('Should clamp GIF quality to valid bounds', async () => {
+      const mockImage = createMockSharp();
+      const edits: ImageEdits = { toFormat: 'gif', quality: 0 };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('gif', {
+        colours: 3,
+        effort: 10,
+        interFrameMaxError: 32,
+        interPaletteMaxError: 10,
+      });
     });
 
     it('Should add compression=av1 for heif format', async () => {
@@ -197,6 +238,42 @@ describe('EditApplicator', () => {
       await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
 
       expect(mockImage.toFormat).toHaveBeenCalledWith('heif', { compression: 'av1' });
+    });
+
+    it('Should cap webp quality at 50 for animated content with no explicit quality', async () => {
+      const mockImage = createMockSharp({ width: 800, height: 600, format: 'gif', pages: 5 });
+      const edits: ImageEdits = { toFormat: 'webp' };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('webp', { quality: 50 });
+    });
+
+    it('Should cap webp quality at 50 for animated content when caller-supplied quality is higher', async () => {
+      const mockImage = createMockSharp({ width: 800, height: 600, format: 'gif', pages: 5 });
+      const edits: ImageEdits = { toFormat: 'webp', quality: 80 };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('webp', { quality: 50 });
+    });
+
+    it('Should honor caller-supplied webp quality when lower than the animated cap', async () => {
+      const mockImage = createMockSharp({ width: 800, height: 600, format: 'gif', pages: 5 });
+      const edits: ImageEdits = { toFormat: 'webp', quality: 40 };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('webp', { quality: 40 });
+    });
+
+    it('Should not cap webp quality for static (single-frame) content', async () => {
+      const mockImage = createMockSharp({ width: 800, height: 600, format: 'webp', pages: 1 });
+      const edits: ImageEdits = { toFormat: 'webp', quality: 80 };
+
+      await EditApplicator.applyEdits(mockImage, edits, mockOriginFetcher as any);
+
+      expect(mockImage.toFormat).toHaveBeenCalledWith('webp', { quality: 80 });
     });
   });
 
