@@ -23,11 +23,22 @@ describe("DIT CloudFront Function", () => {
     // Load and evaluate the CloudFront function
     const functionCode = fs.readFileSync(path.join(__dirname, "../../functions/dit-header-normalization.js"), "utf8");
 
-    // Extract handler function and make it available globally
-    const mockFunctionCode = functionCode.replace("async function handler", "global.handler = async function handler");
+    // Stub the CloudFront runtime 'cloudfront' module (KVS lookups miss, so no path-prefix rewrite)
+    // and extract handler function to make it available globally
+    const mockFunctionCode = functionCode
+      .replace(
+        "import cf from 'cloudfront';",
+        "const cf = { kvs: () => ({ get: async () => { throw new Error('Key not found'); } }) };"
+      )
+      .replace("async function handler", "global.handler = async function handler");
 
     eval(mockFunctionCode);
-    handler = (global as any).handler;
+    // CloudFront always supplies request.uri; default it for fixtures that don't set one
+    const cfHandler = (global as any).handler;
+    handler = (event) => {
+      event.request.uri = event.request.uri ?? "/";
+      return cfHandler(event);
+    };
   });
 
   test("should normalize desktop viewport width", async () => {
